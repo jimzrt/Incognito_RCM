@@ -52,10 +52,10 @@ emmc_part_t *system_part;
 
 #define TPRINTF(text) \
     end_time = get_tmr_ms(); \
-    gfx_printf(&gfx_con, text" done @ %d.%03ds\n", (end_time - start_time) / 1000, (end_time - start_time) % 1000)
+    gfx_printf(text" done @ %d.%03ds\n", (end_time - start_time) / 1000, (end_time - start_time) % 1000)
 #define TPRINTFARGS(text, args...) \
     end_time = get_tmr_ms(); \
-    gfx_printf(&gfx_con, text" done @ %d.%03ds\n", args, (end_time - start_time) / 1000, (end_time - start_time) % 1000)
+    gfx_printf(text" done @ %d.%03ds\n", args, (end_time - start_time) / 1000, (end_time - start_time) % 1000)
 #define SAVE_KEY(name, src, len) _save_key(name, src, len, text_buffer, &buf_index)
 #define SAVE_KEY_FAMILY(name, src, count, len) _save_key_family(name, src, count, len, text_buffer, &buf_index)
 
@@ -227,10 +227,10 @@ static u32  _sprintf(char *buffer, const char *fmt, ...);
 
 void dump_keys() {
     display_backlight_brightness(100, 1000);
-    gfx_clear_partial_grey(&gfx_ctxt, 0x1B, 0, 1280);
-    gfx_con_setpos(&gfx_con, 0, 0);
+    gfx_clear_partial_grey(0x1B, 0, 1280);
+    gfx_con_setpos(0, 0);
 
-    gfx_printf(&gfx_con, "[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d%k]\n\n",
+    gfx_printf("[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d%k]\n\n",
         colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, 0xFFCCCCCC);
 
     u32 start_time = get_tmr_ms(),
@@ -246,15 +246,6 @@ void dump_keys() {
     u8 *pkg1 = (u8 *)malloc(0x40000);
     sdmmc_storage_set_mmc_partition(&storage, 1);
     sdmmc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
-    /*FIL pk1fp;
-    FRESULT fres = FR_OK;
-    fres += f_open(&pk1fp, "sd:/test/package1", FA_READ | FA_OPEN_EXISTING);
-    fres += f_read(&pk1fp, pkg1, f_size(&pk1fp), NULL);
-    fres += f_close(&pk1fp);
-    if (fres != FR_OK) {
-        EPRINTF("failed to read pkg1 from sd");
-        goto out_wait;
-    }*/
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id) {
         EPRINTF("Unknown pkg1 version.");
@@ -287,8 +278,8 @@ void dump_keys() {
             u32 payload_size = *(u32 *)(IPL_LOAD_ADDR + 0x84) - IPL_LOAD_ADDR;
             f_write(&fp, (u8 *)IPL_LOAD_ADDR, payload_size, NULL);
             f_close(&fp);
-            gfx_printf(&gfx_con, "%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
-            gfx_printf(&gfx_con, "\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
+            gfx_printf("%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
+            gfx_printf("\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
             sdmmc_storage_end(&storage);
             if (!reboot_to_sept((u8 *)pkg1 + pkg1_id->tsec_off))
                 goto out_wait;
@@ -376,8 +367,8 @@ get_tsec: ;
         se_aes_cmac(3, keyblob_mac, 0x10, keyblob_block + 0x10, 0xa0);
         if (memcmp(keyblob_block, keyblob_mac, 0x10)) {
             EPRINTFARGS("Keyblob %x corrupt.", i);
-            gfx_hexdump(&gfx_con, i, keyblob_block, 0x10);
-            gfx_hexdump(&gfx_con, i, keyblob_mac, 0x10);
+            gfx_hexdump(i, keyblob_block, 0x10);
+            gfx_hexdump(i, keyblob_mac, 0x10);
             continue;
         }
 
@@ -433,10 +424,6 @@ get_tsec: ;
 
     // Read in package2 header and get package2 real size.
     u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    /*FIL pkg2fp;
-    fres = FR_OK;
-    fres += f_open(&pkg2fp, "sd:/test/package2", FA_READ | FA_OPEN_EXISTING);
-    fres += f_read(&pkg2fp, tmp, NX_EMMC_BLOCKSIZE, NULL);*/
     nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, 1, tmp);
     u32 *hdr_pkg2_raw = (u32 *)(tmp + 0x100);
     u32 pkg2_size = hdr_pkg2_raw[0] ^ hdr_pkg2_raw[2] ^ hdr_pkg2_raw[3];
@@ -449,13 +436,6 @@ get_tsec: ;
     // Read in package2.
     u32 pkg2_size_aligned = ALIGN(pkg2_size, NX_EMMC_BLOCKSIZE);
     pkg2 = malloc(pkg2_size_aligned);
-    /*fres += f_lseek(&pkg2fp, 0);
-    fres += f_read(&pkg2fp, pkg2, f_size(&pkg2fp), NULL);
-    fres += f_close(&pkg2fp);
-    if (fres != FR_OK) {
-        EPRINTF("failed to read pkg2 from sd");
-        goto pkg2_done;
-    }*/
     nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, pkg2_size_aligned / NX_EMMC_BLOCKSIZE, pkg2);
 
     // Decrypt package2 and parse KIP1 blobs in INI1 section.
@@ -881,19 +861,19 @@ key_output: ;
     if (pkg1_id->kb == KB_FIRMWARE_VERSION_620)
         SAVE_KEY("tsec_root_key", tsec_keys + 0x10, 0x10);
 
-    //gfx_con.fntsz = 8; gfx_puts(&gfx_con, text_buffer); gfx_con.fntsz = 16;
+    //gfx_con.fntsz = 8; gfx_puts(text_buffer); gfx_con.fntsz = 16;
 
     TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[0], _key_count, colors[1]);
 
     f_mkdir("switch");
     if (!sd_save_to_file(text_buffer, buf_index, "sd:/switch/prod.keys"))
-        gfx_printf(&gfx_con, "%kWrote %d bytes to /switch/prod.keys\n", colors[2], buf_index);
+        gfx_printf("%kWrote %d bytes to /switch/prod.keys\n", colors[2], buf_index);
     else
         EPRINTF("Failed to save keys to SD.");
     sd_unmount();
     free(text_buffer);
 
-    gfx_printf(&gfx_con, "\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[3], colors[4], colors[5]);
+    gfx_printf("\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[3], colors[4], colors[5]);
 
 out_wait: ;
     u32 btn = btn_wait();

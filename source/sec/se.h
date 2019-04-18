@@ -32,4 +32,5 @@ int se_aes_xts_crypt_sec(u32 ks1, u32 ks2, u32 enc, u64 sec, void *dst, const vo
 int se_aes_xts_crypt(u32 ks1, u32 ks2, u32 enc, u64 sec, void *dst, const void *src, u32 secsize, u32 num_secs);
 int se_aes_cmac(u32 ks, void *dst, u32 dst_size, const void *src, u32 src_size);
 int se_calc_sha256(void *dst, const void *src, u32 src_size);
+
 #endif

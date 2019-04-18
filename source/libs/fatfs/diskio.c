@@ -166,7 +166,7 @@ DRESULT disk_read (
                     memcpy(tweak, sector_cache[s].tweak, 0x10);
                     prev_sector = sector;
                     prev_cluster = sector / 0x20;
-                    //gfx_printf(&gfx_con, "addr %x sec %x count %x cached\n", sector * 0x200, sector, count);
+                    //gfx_printf("addr %x sec %x count %x cached\n", sector * 0x200, sector, count);
                     return RES_OK;
                 }
             }
@@ -180,7 +180,7 @@ DRESULT disk_read (
         }
 
         if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
-            //gfx_hexdump(&gfx_con, 0, buff, 0x100);
+            //gfx_hexdump(0, buff, 0x100);
             if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
                 prev_cluster = sector / 0x20;
                 tweak_exp = sector % 0x20;
@@ -192,13 +192,13 @@ DRESULT disk_read (
             }
 
             // fatfs will never pull more than a cluster
-            //gfx_printf(&gfx_con, "sec %6x count %2x tweak %2x\n", sector, count, tweak_exp);
+            //gfx_printf("sec %6x count %2x tweak %2x\n", sector, count, tweak_exp);
             _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
             if (cache_sector) {
                 memcpy(sector_cache[s].cached_sector, buff, 0x200);
                 memcpy(sector_cache[s].tweak, tweak, 0x10);
             }
-            //gfx_hexdump(&gfx_con, 0, buff, 0x10);
+            //gfx_hexdump(0, buff, 0x10);
             prev_sector = sector + count - 1;
             return RES_OK;
         }

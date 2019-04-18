@@ -1,8 +1,8 @@
 /*---------------------------------------------------------------------------/
-/  FatFs - Configuration file
+/  FatFs Functional Configurations
 /---------------------------------------------------------------------------*/
 
-#define FFCONF_DEF 63463	/* Revision ID */
+#define FFCONF_DEF	86604	/* Revision ID */
 
 /*---------------------------------------------------------------------------/
 / Function Configurations
@@ -232,14 +232,14 @@
 
 #define FF_FS_EXFAT		1
 /* This option switches support for exFAT filesystem. (0:Disable or 1:Enable)
-/  To enable exFAT, also LFN needs to be enabled.
+/  To enable exFAT, also LFN needs to be enabled. (FF_USE_LFN >= 1)
 /  Note that enabling exFAT discards ANSI C (C89) compatibility. */
 
 
 #define FF_FS_NORTC		1
 #define FF_NORTC_MON	1
 #define FF_NORTC_MDAY	1
-#define FF_NORTC_YEAR	2018
+#define FF_NORTC_YEAR	2019
 /* The option FF_FS_NORTC switches timestamp function. If the system does not have
 /  any RTC function or valid timestamp is not needed, set FF_FS_NORTC = 1 to disable
 /  the timestamp function. Every object modified by FatFs will have a fixed timestamp
@@ -262,6 +262,7 @@
 /      lock control is independent of re-entrancy. */
 
 
+/* #include <somertos.h>	// O/S definitions */
 #define FF_FS_REENTRANT	0
 #define FF_FS_TIMEOUT	1000
 #define FF_SYNC_t		HANDLE
@@ -281,8 +282,6 @@
 /  The FF_SYNC_t defines O/S dependent sync object type. e.g. HANDLE, ID, OS_EVENT*,
 /  SemaphoreHandle_t and etc. A header file for O/S definitions needs to be
 /  included somewhere in the scope of ff.h. */
-
-/* #include <windows.h>	// O/S definitions  */
 
 
 

@@ -45,7 +45,7 @@
 #define COLOR_BLUE   0xFF00DDFF
 #define COLOR_VIOLET 0xFF8040FF
 
-typedef char s8;
+typedef signed char s8;
 typedef short s16;
 typedef short SHORT;
 typedef int s32;
@@ -79,8 +79,16 @@ typedef struct __attribute__((__packed__)) _boot_cfg_t
 	u8  boot_cfg;
 	u8  autoboot;
 	u8  autoboot_list;
-	u8  rsvd_cfg;
-	u8  rsvd[32];
+	u8  extra_cfg;
+	u8  rsvd[128];
 } boot_cfg_t;
+
+typedef struct __attribute__((__packed__)) _reloc_meta_t
+{
+	u32 start;
+	u32 stack;
+	u32 end;
+	u32 ep;
+} reloc_meta_t;
 
 #endif

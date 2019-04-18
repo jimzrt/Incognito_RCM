@@ -23,7 +23,7 @@
 #include "../mem/heap.h"
 
 /*#include "gfx.h"
-#define DPRINTF(...) gfx_printf(&gfx_con, __VA_ARGS__)*/
+#define DPRINTF(...) gfx_printf(__VA_ARGS__)*/
 #define DPRINTF(...)
 
 static inline u32 unstuff_bits(u32 *resp, u32 start, u32 size)
@@ -519,7 +519,7 @@ int sdmmc_storage_init_mmc(sdmmc_storage_t *storage, sdmmc_t *sdmmc, u32 id, u32
 	free(ext_csd);
 	DPRINTF("[MMC] got ext_csd\n");
 	_mmc_storage_parse_cid(storage); //This needs to be after csd and ext_csd
-	//gfx_hexdump(&gfx_con, 0, ext_csd, 512);
+	//gfx_hexdump(0, ext_csd, 512);
 
 	/* When auto BKOPS is enabled the mmc device should be powered all the time until we disable this and check status.
 	   Disable it for now until BKOPS disable added to power down sequence at sdmmc_storage_end().
@@ -713,7 +713,7 @@ int _sd_storage_get_scr(sdmmc_storage_t *storage, u8 *buf)
 		storage->raw_scr[i]     = buf[i + 3];
 	}
 	_sd_storage_parse_scr(storage);
-	//gfx_hexdump(&gfx_con, 0, storage->raw_scr, 8);
+	//gfx_hexdump(0, storage->raw_scr, 8);
 
 	return _sdmmc_storage_check_result(tmp);
 }
@@ -825,7 +825,7 @@ int _sd_storage_enable_highspeed_low_volt(sdmmc_storage_t *storage, u32 type, u8
 
 	if (!_sd_storage_switch_get(storage, buf))
 		return 0;
-	//gfx_hexdump(&gfx_con, 0, (u8 *)buf, 64);
+	//gfx_hexdump(0, (u8 *)buf, 64);
 
 	u32 hs_type = 0;
 	switch (type)
@@ -875,7 +875,7 @@ int _sd_storage_enable_highspeed_high_volt(sdmmc_storage_t *storage, u8 *buf)
 {
 	if (!_sd_storage_switch_get(storage, buf))
 		return 0;
-	//gfx_hexdump(&gfx_con, 0, (u8 *)buf, 64);
+	//gfx_hexdump(0, (u8 *)buf, 64);
 	if (!(buf[13] & 2))
 		return 1;
 
@@ -963,7 +963,7 @@ static int _sd_storage_get_ssr(sdmmc_storage_t *storage, u8 *buf)
 		storage->raw_ssr[i]     = buf[i + 3];
 	}
 	_sd_storage_parse_ssr(storage);
-	//gfx_hexdump(&gfx_con, 0, storage->raw_ssr, 64);
+	//gfx_hexdump(0, storage->raw_ssr, 64);
 
 	return _sdmmc_storage_check_result(tmp);
 }
@@ -1088,7 +1088,7 @@ int sdmmc_storage_init_sd(sdmmc_storage_t *storage, sdmmc_t *sdmmc, u32 id, u32 
 		return 0;
 	}
 		
-	//gfx_hexdump(&gfx_con, 0, storage->raw_scr, 8);
+	//gfx_hexdump(0, storage->raw_scr, 8);
 	DPRINTF("[SD] got scr\n");
 
 	// Check if card supports a wider bus and if it's not SD Version 1.X

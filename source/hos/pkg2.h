@@ -26,20 +26,6 @@
 #define PKG2_SEC_KERNEL 0
 #define PKG2_SEC_INI1 1
 
-#define INI1_MAGIC 0x31494E49
-
-enum
-{
-	// Always applied.
-	SVC_GENERIC   = 0,
-	// Generic instruction patches.
-	SVC_VERIFY_DS = 0x10,
-	DEBUG_MODE_EN,
-	ATM_GEN_PATCH,
-	// >4 bytes patches. Value is a pointer of a u32 array.
-	ATM_ARR_PATCH,
-};
-
 typedef struct _pkg2_hdr_t
 {
 	u8 ctr[0x10];

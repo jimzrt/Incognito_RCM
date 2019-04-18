@@ -27,7 +27,7 @@
 #include "../gfx/gfx.h"
 
 /*#include "util.h"
-#define DPRINTF(...) gfx_printf(&gfx_con, __VA_ARGS__)
+#define DPRINTF(...) gfx_printf(__VA_ARGS__)
 #define DEBUG_PRINTING*/
 #define DPRINTF(...)
 
@@ -103,10 +103,10 @@ int pkg2_decompress_kip(pkg2_kip1_info_t* ki, u32 sectsToDecomp)
 
 		unsigned int compSize = hdr.sections[sectIdx].size_comp;
 		unsigned int outputSize = hdr.sections[sectIdx].size_decomp;
-		//gfx_printf(&gfx_con, "Decomping %s KIP1 sect %d of size %d...\n", (const char*)hdr.name, sectIdx, compSize);
+		//gfx_printf("Decomping %s KIP1 sect %d of size %d...\n", (const char*)hdr.name, sectIdx, compSize);
 		if (blz_uncompress_srcdest(srcDataPtr, compSize, dstDataPtr, outputSize) == 0)
 		{
-			gfx_printf(&gfx_con, "%kERROR decomping sect %d of %s KIP!%k\n", 0xFFFF0000, sectIdx, (char*)hdr.name, 0xFFCCCCCC);			
+			gfx_printf("%kERROR decomping sect %d of %s KIP!%k\n", 0xFFFF0000, sectIdx, (char*)hdr.name, 0xFFCCCCCC);			
 			free(newKip);
 
 			return 1;
@@ -145,7 +145,7 @@ pkg2_hdr_t *pkg2_decrypt(void *data)
 
 	// Decrypt header.
 	se_aes_crypt_ctr(8, hdr, sizeof(pkg2_hdr_t), hdr, sizeof(pkg2_hdr_t), hdr);
-	//gfx_hexdump(&gfx_con, (u32)hdr, hdr, 0x100);
+	//gfx_hexdump((u32)hdr, hdr, 0x100);
 
 	if (hdr->magic != PKG2_MAGIC)
 		return NULL;
@@ -157,7 +157,7 @@ DPRINTF("sec %d has size %08X\n", i, hdr->sec_size[i]);
 			continue;
 
 		se_aes_crypt_ctr(8, pdata, hdr->sec_size[i], pdata, hdr->sec_size[i], &hdr->sec_ctr[i * 0x10]);
-		//gfx_hexdump(&gfx_con, (u32)pdata, pdata, 0x100);
+		//gfx_hexdump((u32)pdata, pdata, 0x100);
 
 		pdata += hdr->sec_size[i];
 	}

@@ -20,8 +20,8 @@
 
 #include "types.h"
 
-#define byte_swap_32(num) ((num >> 24) & 0xff) | ((num << 8) & 0xff0000) | \
-						((num >> 8 )& 0xff00) | ((num << 24) & 0xff000000)
+#define byte_swap_32(num) (((num >> 24) & 0xff) | ((num << 8) & 0xff0000) | \
+						((num >> 8 )& 0xff00) | ((num << 24) & 0xff000000))
 
 typedef struct _cfg_op_t
 {
@@ -34,6 +34,10 @@ u32 get_tmr_ms();
 u32 get_tmr_s();
 void usleep(u32 ticks);
 void msleep(u32 milliseconds);
+void panic(u32 val);
+void reboot_normal();
+void reboot_rcm();
+void power_off();
 void exec_cfg(u32 *base, const cfg_op_t *ops, u32 num_ops);
 u32 crc32c(const void *buf, u32 len);
 

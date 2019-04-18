@@ -36,7 +36,7 @@
 #include "../utils/util.h"
 
 extern sdmmc_t sd_sdmmc;
-extern boot_cfg_t *b_cfg;
+extern boot_cfg_t b_cfg;
 
 void _config_oscillators()
 {
@@ -140,7 +140,7 @@ void _mbist_workaround()
 void _config_se_brom()
 {
 	// Skip SBK/SSK if sept was run.
-	if (!(b_cfg->boot_cfg & BOOT_CFG_SEPT_RUN))
+	if (!(b_cfg.boot_cfg & BOOT_CFG_SEPT_RUN))
 	{
 		// Bootrom part we skipped.
 		u32 sbk[4] = { 
@@ -161,7 +161,7 @@ void _config_se_brom()
 
 	// This memset needs to happen here, else TZRAM will behave weirdly later on.
 	memset((void *)TZRAM_BASE, 0, 0x10000);
-	PMC(APBDEV_PMC_CRYPTO_OP) = 0;
+	PMC(APBDEV_PMC_CRYPTO_OP) = PMC_CRYPTO_OP_SE_ENABLE;
 	SE(SE_INT_STATUS_REG_OFFSET) = 0x1F;
 
 	// Clear the boot reason to avoid problems later
@@ -226,6 +226,9 @@ void config_hw()
 	// Fix GPU after warmboot for Linux.
 	i2c_send_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_GPIO5, 2);
 	i2c_send_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_GPIO6, 2);
+
+	// Disable low battery shutdown monitor.
+	max77620_low_battery_monitor_config();
 
 	_config_pmc_scratch(); // Missing from 4.x+
 

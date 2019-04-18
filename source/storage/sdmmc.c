@@ -23,8 +23,6 @@
 #include "../mem/heap.h"
 
 /*#include "gfx.h"
-extern gfx_ctxt_t gfx_ctxt;
-extern gfx_con_t gfx_con;
 #define DPRINTF(...) gfx_printf(&gfx_con, __VA_ARGS__)*/
 #define DPRINTF(...)
 

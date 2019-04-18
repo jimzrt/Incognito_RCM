@@ -31,7 +31,8 @@
 #include "../../storage/nx_emmc.h"
 #include "../../storage/sdmmc.h"
 
-extern gfx_con_t gfx_con;
+#define SDMMC_UPPER_BUFFER 0xB8000000
+#define DRAM_START         0x80000000
 
 extern sdmmc_storage_t sd_storage;
 extern sdmmc_storage_t storage;
@@ -48,8 +49,8 @@ typedef struct {
     u8  cached_sector[0x200];
 } sector_cache_t;
  
-#define MAX_SEC_CACHE_ENTRIES 100
-static sector_cache_t *sector_cache = NULL;
+#define MAX_SEC_CACHE_ENTRIES 64
+static sector_cache_t *sector_cache = (sector_cache_t*)0x40020000;
 static u32 secindex = 0;
 
 DSTATUS disk_status (
@@ -139,19 +140,17 @@ DRESULT disk_read (
     switch (pdrv)
     {
     case 0:
-        if ((u32)buff >= 0x90000000)
+        if ((u32)buff >= DRAM_START)
             return sdmmc_storage_read(&sd_storage, sector, count, buff) ? RES_OK : RES_ERROR;
-        u8 *buf = (u8 *)0x98000000; //TODO: define this somewhere.
+        u8 *buf = (u8 *)SDMMC_UPPER_BUFFER;
         if (sdmmc_storage_read(&sd_storage, sector, count, buf))
         {
             memcpy(buff, buf, 512 * count);
             return RES_OK;
         }
         return RES_ERROR;
-    case 1:
-        if (!sector_cache) // init sector cache
-            sector_cache = (sector_cache_t*)malloc(sizeof(sector_cache_t) * MAX_SEC_CACHE_ENTRIES);
 
+    case 1:;
         static u8 tweak[0x10];
         static u64 prev_cluster = -1;
         static u32 prev_sector = 0;
@@ -179,42 +178,31 @@ DRESULT disk_read (
                 secindex++;
             }
         }
-        if ((u32)buff >= 0x90000000) {
-            if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
-                //gfx_hexdump(&gfx_con, 0, buff, 0x100);
-                if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
-                    prev_cluster = sector / 0x20;
-                    tweak_exp = sector % 0x20;
-                } else if (sector > prev_sector) { // sector in same cluster and past last sector
-                    tweak_exp = sector - prev_sector - 1;
-                    regen_tweak = false;
-                } else { // sector in same cluster and before or same as last sector
-                    tweak_exp = sector % 0x20;
-                }
 
-                // fatfs will never pull more than a cluster
-                //gfx_printf(&gfx_con, "sec %6x count %2x tweak %2x\n", sector, count, tweak_exp);
-                _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-                if (cache_sector) {
-                    memcpy(sector_cache[s].cached_sector, buff, 0x200);
-                    memcpy(sector_cache[s].tweak, tweak, 0x10);
-                }
-                //gfx_hexdump(&gfx_con, 0, buff, 0x10);
-                prev_sector = sector + count - 1;
-                return RES_OK;
+        if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
+            //gfx_hexdump(&gfx_con, 0, buff, 0x100);
+            if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
+                prev_cluster = sector / 0x20;
+                tweak_exp = sector % 0x20;
+            } else if (sector > prev_sector) { // sector in same cluster and past last sector
+                tweak_exp = sector - prev_sector - 1;
+                regen_tweak = false;
+            } else { // sector in same cluster and before or same as last sector
+                tweak_exp = sector % 0x20;
             }
-            return RES_ERROR;
-        } else {
-            u8 *buf = (u8 *)0x98000000;
-            if (nx_emmc_part_read(&storage, system_part, sector, count, buf)) {
-                gfx_printf(&gfx_con, "sec %d count %d\n", sector, count);
-                // _emmc_xts(9, 8, 0, tweak, (sector + 0x20 - 1) / 0x20, buf, buf, count * 0x200);
-                //se_aes_xts_crypt(8, 9, 0, sector / 0x20, buf, buf, 0x200, (count + 0x20 - 1) / 0x20);
-                memcpy(buff, buf, 512 * count);
-                return RES_OK;
+
+            // fatfs will never pull more than a cluster
+            //gfx_printf(&gfx_con, "sec %6x count %2x tweak %2x\n", sector, count, tweak_exp);
+            _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+            if (cache_sector) {
+                memcpy(sector_cache[s].cached_sector, buff, 0x200);
+                memcpy(sector_cache[s].tweak, tweak, 0x10);
             }
-            return RES_ERROR;
+            //gfx_hexdump(&gfx_con, 0, buff, 0x10);
+            prev_sector = sector + count - 1;
+            return RES_OK;
         }
+        return RES_ERROR;
     }
     return RES_ERROR;
 }
@@ -228,9 +216,9 @@ DRESULT disk_write (
 {
     if (pdrv == 1)
         return RES_WRPRT;
-    if ((u32)buff >= 0x90000000)
+    if ((u32)buff >= DRAM_START)
         return sdmmc_storage_write(&sd_storage, sector, count, (void *)buff) ? RES_OK : RES_ERROR;
-    u8 *buf = (u8 *)0x98000000; //TODO: define this somewhere.
+    u8 *buf = (u8 *)SDMMC_UPPER_BUFFER; //TODO: define this somewhere.
     memcpy(buf, buff, 512 * count);
     if (sdmmc_storage_write(&sd_storage, sector, count, buf))
         return RES_OK;

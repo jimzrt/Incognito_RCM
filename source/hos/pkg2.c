@@ -26,11 +26,6 @@
 
 #include "../gfx/gfx.h"
 
-#pragma GCC push_options
-#pragma GCC optimize ("Os")
-
-extern gfx_con_t gfx_con;
-
 /*#include "util.h"
 #define DPRINTF(...) gfx_printf(&gfx_con, __VA_ARGS__)
 #define DEBUG_PRINTING*/
@@ -46,7 +41,12 @@ static u32 _pkg2_calc_kip1_size(pkg2_kip1_t *kip1)
 
 void pkg2_parse_kips(link_t *info, pkg2_hdr_t *pkg2)
 {
-	u8 *ptr = pkg2->data + pkg2->sec_size[PKG2_SEC_KERNEL];
+	u8 *ptr = pkg2->data;
+	if (pkg2->sec_size[PKG2_SEC_INI1] == 0)
+		ptr += *(u32 *)(ptr + 0x168);
+	else
+		ptr += pkg2->sec_size[PKG2_SEC_KERNEL];
+
 	pkg2_ini1_t *ini1 = (pkg2_ini1_t *)ptr;
 	ptr += sizeof(pkg2_ini1_t);
 
@@ -164,5 +164,3 @@ DPRINTF("sec %d has size %08X\n", i, hdr->sec_size[i]);
 
 	return hdr;
 }
-
-#pragma GCC pop_options

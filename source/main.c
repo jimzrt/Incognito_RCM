@@ -34,12 +34,6 @@
 
 #include "keys/keys.h"
 
-gfx_ctxt_t gfx_ctxt;
-gfx_con_t gfx_con;
-
-#define EPRINTF(text) gfx_printf(&gfx_con, "%k"text"%k\n", 0xFFFF0000, 0xFFCCCCCC)
-#define EPRINTFARGS(text, args...) gfx_printf(&gfx_con, "%k"text"%k\n", 0xFFFF0000, args, 0xFFCCCCCC)
-
 sdmmc_t sd_sdmmc;
 sdmmc_storage_t sd_storage;
 FATFS sd_fs;
@@ -206,7 +200,7 @@ void ipl_main() {
     b_cfg = (boot_cfg_t *)(IPL_LOAD_ADDR + PATCHED_RELOC_SZ);
 
     config_hw();
-    pivot_stack(0x90010000);
+    pivot_stack(0x4003F000);
     heap_init(0x90020000);
 
     display_init();

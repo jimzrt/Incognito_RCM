@@ -25,8 +25,6 @@
 #include "diskio.h"		/* Declarations of device I/O functions */
 
 #include "../../gfx/gfx.h"
-extern gfx_ctxt_t gfx_ctxt;
-extern gfx_con_t gfx_con;
 #define EFSPRINTF(text, ...) print_error(); gfx_printf(&gfx_con, "%k"text"%k\n", 0xFFFFFF00, 0xFFFFFFFF);
 //#define EFSPRINTF(...)
 
@@ -3780,6 +3778,9 @@ FRESULT f_read (
 	BYTE *rbuff = (BYTE*)buff;
 
 
+	UINT br_tmp;
+	if (!br)
+		br = &br_tmp;
 	*br = 0;	/* Clear read byte counter */
 	res = validate(&fp->obj, &fs);				/* Check validity of the file object */
 	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) {
@@ -3902,6 +3903,9 @@ FRESULT f_write (
 	const BYTE *wbuff = (const BYTE*)buff;
 
 
+	UINT bw_tmp;
+	if (!bw)
+		bw = &bw_tmp;
 	*bw = 0;	/* Clear write byte counter */
 	res = validate(&fp->obj, &fs);			/* Check validity of the file object */
 	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) {

@@ -232,8 +232,7 @@ void config_hw()
 	CLOCK(CLK_RST_CONTROLLER_SCLK_BURST_POLICY) = (CLOCK(CLK_RST_CONTROLLER_SCLK_BURST_POLICY) & 0xFFFF8888) | 0x3333;
 
 	sdram_init();
-	// bundle lp0 fw instead of loading it from SD as hekate does
-	sdram_lp0_save_params(sdram_get_params_patched());
+	mc_enable_ahb_redirect();
 }
 
 void reconfig_hw_workaround(bool extra_reconfig, u32 magic)

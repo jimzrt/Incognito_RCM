@@ -4,11 +4,11 @@ endif
 
 include $(DEVKITARM)/base_rules
 
-IPL_LOAD_ADDR := 0x40008000
+IPL_LOAD_ADDR := 0x40003000
 
 TARGET := Lockpick_RCM
-BLVERSION_MAJOR := 1
-BLVERSION_MINOR := 0
+LPVERSION_MAJOR := 1
+LPVERSION_MINOR := 1
 BUILD := build
 OUTPUT := output
 SOURCEDIR = source
@@ -53,6 +53,7 @@ OBJS += $(addprefix $(BUILD)/$(TARGET)/, \
 )
 
 CUSTOMDEFINES := -DIPL_LOAD_ADDR=$(IPL_LOAD_ADDR)
+CUSTOMDEFINES += -DLP_VER_MJ=$(LPVERSION_MAJOR) -DLP_VER_MN=$(LPVERSION_MINOR)
 
 ARCH := -march=armv4t -mtune=arm7tdmi -mthumb-interwork
 CFLAGS = $(ARCH) -O2 -nostdlib -ffunction-sections -fdata-sections -fomit-frame-pointer -std=gnu11 -Wall $(CUSTOMDEFINES)

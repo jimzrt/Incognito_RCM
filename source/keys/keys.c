@@ -22,7 +22,7 @@
 #include "../hos/sept.h"
 #include "../libs/fatfs/ff.h"
 #include "../mem/heap.h"
-#include "../rtc/max77620-rtc.h"
+#include "../mem/sdram.h"
 #include "../sec/se.h"
 #include "../sec/se_t210.h"
 #include "../sec/tsec.h"
@@ -38,9 +38,6 @@
 #include <string.h>
 #include <stdarg.h>
 
-extern gfx_ctxt_t gfx_ctxt;
-extern gfx_con_t gfx_con;
-
 extern bool sd_mount();
 extern void sd_unmount();
 extern void *sd_file_read(char *path);
@@ -53,8 +50,6 @@ u32 _key_count = 0;
 sdmmc_storage_t storage;
 emmc_part_t *system_part;
 
-#define EPRINTF(text) gfx_printf(&gfx_con, "%k"text"%k\n", 0xFFCCCCCC, 0xFFCCCCCC)
-#define EPRINTFARGS(text, args...) gfx_printf(&gfx_con, "%k"text"%k\n", 0xFFCCCCCC, args, 0xFFCCCCCC)
 #define TPRINTF(text) \
     end_time = get_tmr_ms(); \
     gfx_printf(&gfx_con, text" done @ %d.%03ds\n", (end_time - start_time) / 1000, (end_time - start_time) % 1000)
@@ -232,11 +227,11 @@ static u32  _sprintf(char *buffer, const char *fmt, ...);
 
 void dump_keys() {
     display_backlight_brightness(100, 1000);
-    gfx_clear_partial_grey(&gfx_ctxt, 0x1B, 0, 1256);
+    gfx_clear_partial_grey(&gfx_ctxt, 0x1B, 0, 1280);
     gfx_con_setpos(&gfx_con, 0, 0);
 
-    gfx_printf(&gfx_con, "[%kLo%kck%kpi%kck%k-R%kCM%k]\n\n",
-        colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFCCCCCC);
+    gfx_printf(&gfx_con, "[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d%k]\n\n",
+        colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, 0xFFCCCCCC);
 
     u32 start_time = get_tmr_ms(),
         end_time,
@@ -251,11 +246,24 @@ void dump_keys() {
     u8 *pkg1 = (u8 *)malloc(0x40000);
     sdmmc_storage_set_mmc_partition(&storage, 1);
     sdmmc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
+    /*FIL pk1fp;
+    FRESULT fres = FR_OK;
+    fres += f_open(&pk1fp, "sd:/test/package1", FA_READ | FA_OPEN_EXISTING);
+    fres += f_read(&pk1fp, pkg1, f_size(&pk1fp), NULL);
+    fres += f_close(&pk1fp);
+    if (fres != FR_OK) {
+        EPRINTF("failed to read pkg1 from sd");
+        goto out_wait;
+    }*/
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id) {
         EPRINTF("Unknown pkg1 version.");
         goto out_wait;
     }
+
+    u32 MAX_KEY = 6;
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
+        MAX_KEY = pkg1_id->kb + 1;
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
         if (!f_stat("sd:/sept/payload.bak", NULL)) {
@@ -264,9 +272,11 @@ void dump_keys() {
         }
 
         if (!(EMC(EMC_SCRATCH0) & EMC_SEPT_RUN)) {
+            // bundle lp0 fw for sept instead of loading it from SD as hekate does
+            sdram_lp0_save_params(sdram_get_params_patched());
             FIL fp;
             if (f_stat("sd:/sept/sept-primary.bin", NULL) || f_stat("sd:/sept/sept-secondary.enc", NULL)) {
-                EPRINTF("On firmware 7.x but no sept payload present\nSkipping new key derivation...");
+                EPRINTF("On firmware 7.x or higher but no sept payload present\nSkipping new key derivation...");
                 goto get_tsec;
             }
             // backup post-reboot payload
@@ -277,7 +287,7 @@ void dump_keys() {
             u32 payload_size = *(u32 *)(IPL_LOAD_ADDR + 0x84) - IPL_LOAD_ADDR;
             f_write(&fp, (u8 *)IPL_LOAD_ADDR, payload_size, NULL);
             f_close(&fp);
-            gfx_printf(&gfx_con, "%kFirmware 7.x detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
+            gfx_printf(&gfx_con, "%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
             gfx_printf(&gfx_con, "\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
             sdmmc_storage_end(&storage);
             if (!reboot_to_sept((u8 *)pkg1 + pkg1_id->tsec_off))
@@ -423,6 +433,10 @@ get_tsec: ;
 
     // Read in package2 header and get package2 real size.
     u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    /*FIL pkg2fp;
+    fres = FR_OK;
+    fres += f_open(&pkg2fp, "sd:/test/package2", FA_READ | FA_OPEN_EXISTING);
+    fres += f_read(&pkg2fp, tmp, NX_EMMC_BLOCKSIZE, NULL);*/
     nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, 1, tmp);
     u32 *hdr_pkg2_raw = (u32 *)(tmp + 0x100);
     u32 pkg2_size = hdr_pkg2_raw[0] ^ hdr_pkg2_raw[2] ^ hdr_pkg2_raw[3];
@@ -435,12 +449,23 @@ get_tsec: ;
     // Read in package2.
     u32 pkg2_size_aligned = ALIGN(pkg2_size, NX_EMMC_BLOCKSIZE);
     pkg2 = malloc(pkg2_size_aligned);
+    /*fres += f_lseek(&pkg2fp, 0);
+    fres += f_read(&pkg2fp, pkg2, f_size(&pkg2fp), NULL);
+    fres += f_close(&pkg2fp);
+    if (fres != FR_OK) {
+        EPRINTF("failed to read pkg2 from sd");
+        goto pkg2_done;
+    }*/
     nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, pkg2_size_aligned / NX_EMMC_BLOCKSIZE, pkg2);
-    
+
     // Decrypt package2 and parse KIP1 blobs in INI1 section.
     se_aes_key_set(8, master_key[pkg1_id->kb], 0x10);
     se_aes_unwrap_key(8, 8, package2_key_source);
     pkg2_hdr_t *pkg2_hdr = pkg2_decrypt(pkg2);
+    if (!pkg2_hdr) {
+        EPRINTF("Failed to decrypt Package2.");
+        goto pkg2_done;
+    }
 
     TPRINTFARGS("%kDecrypt pkg2... ", colors[2]);
 
@@ -481,7 +506,7 @@ get_tsec: ;
         u8 temp[7] = {2, 3, 4, 0, 5, 6, 1};
         memcpy(hash_order, temp, 7);
     } else {
-        // 2.0.0 - 7.0.1
+        // 2.0.0 - 8.0.0
         alignment = 0x40;
         switch (pkg1_id->kb) {
         case KB_FIRMWARE_VERSION_100_200:
@@ -514,7 +539,7 @@ get_tsec: ;
             break;
         case KB_FIRMWARE_VERSION_700:
             start_offset = 0x29c50;
-            hks_offset_from_end = 0x18bf5;
+            hks_offset_from_end -= 0x6a73;
             alignment = 8;
             break;
         }
@@ -567,8 +592,6 @@ pkg2_done:
         se_aes_crypt_block_ecb(8, 0, save_mac_key, fs_keys[6]);
     }
 
-    u32 MAX_KEY = pkg1_id->kb < KB_FIRMWARE_VERSION_620 ? 6 : pkg1_id->kb + 1;
-
     for (u32 i = 0; i < MAX_KEY; i++) {
         if (!_key_exists(master_key[i]))
             continue;
@@ -584,10 +607,6 @@ pkg2_done:
     }
 
 
-    if (memcmp(pkg1_id->id, "2016", 4))
-        gfx_printf(&gfx_con, "%kES & SSL keys... ", colors[5]);
-    else
-        gfx_printf(&gfx_con, "%kSSL keys...      ", colors[5]);
     if (!_key_exists(header_key) || !_key_exists(bis_key[2]))
         goto key_output;
 
@@ -618,24 +637,13 @@ pkg2_done:
         title_limit = 1;
     u8 *temp_file = NULL;
 
-    u32 x, y, spinner_time = get_tmr_ms(), spinner_idx = 0, color_idx = 0;
-    char spinner[4] = {'/', '-', '\\', '|'};
-    gfx_con_getpos(&gfx_con, &x, &y);
-
     if (f_opendir(&dir, path)) {
         EPRINTF("Failed to open System:/Contents/registered.");
         goto dismount;
     }
 
     // prepopulate /Contents/registered in decrypted sector cache
-    while (!f_readdir(&dir, &fno) && fno.fname[0]) {
-        if (get_tmr_ms() - spinner_time > 75) {
-            spinner_time = get_tmr_ms();
-            gfx_con_setpos(&gfx_con, x, y);
-            gfx_con_setcol(&gfx_con, colors[color_idx++ % 6], 1, 0xFF1B1B1B);
-            gfx_putc(&gfx_con, spinner[spinner_idx++ % 4]);
-        }
-    }
+    while (!f_readdir(&dir, &fno) && fno.fname[0]) {}
     f_closedir(&dir);
 
     if (f_opendir(&dir, path)) {
@@ -647,12 +655,6 @@ pkg2_done:
     start_offset = 0;
 
     while (!f_readdir(&dir, &fno) && fno.fname[0] && titles_found < title_limit) {
-        if (get_tmr_ms() - spinner_time > 75) {
-            spinner_time = get_tmr_ms();
-            gfx_con_setpos(&gfx_con, x, y);
-            gfx_con_setcol(&gfx_con, colors[color_idx++ % 6], 1, 0xFF1B1B1B);
-            gfx_putc(&gfx_con, spinner[spinner_idx++ % 4]);
-        }
         memcpy(path + 26, fno.fname, 36);
         path[62] = 0;
         if (fno.fattrib & AM_DIR)
@@ -698,8 +700,8 @@ pkg2_done:
             }
             hash_index = 0;
             // decrypt only what is needed to locate needed keys
-            temp_file = (u8*)_nca_process(5, 4, &fp, start_offset, 0x50);
-            for (u32 i = 0; i <= 0x40; ) {
+            temp_file = (u8*)_nca_process(5, 4, &fp, start_offset, 0xc0);
+            for (u32 i = 0; i <= 0xb0; ) {
                 se_calc_sha256(temp_hash, temp_file + i, 0x10);
                 if (!memcmp(temp_hash, es_hashes_sha256[hash_order[hash_index]], 0x10)) {
                     memcpy(es_keys[hash_order[hash_index]], temp_file + i, 0x10);
@@ -740,8 +742,8 @@ pkg2_done:
             }
             if (!memcmp(pkg1_id->id, "2016", 4))
                 start_offset = 0x449dc;
-            temp_file = (u8*)_nca_process(5, 4, &fp, start_offset, 0x50);
-            for (u32 i = 0; i <= 0x40; i++) {
+            temp_file = (u8*)_nca_process(5, 4, &fp, start_offset, 0x70);
+            for (u32 i = 0; i <= 0x60; i++) {
                 se_calc_sha256(temp_hash, temp_file + i, 0x10);
                 if (!memcmp(temp_hash, ssl_hashes_sha256[1], 0x10)) {
                     memcpy(ssl_keys[1], temp_file + i, 0x10);
@@ -794,6 +796,17 @@ pkg2_done:
     }
     f_close(&fp);
 
+dismount:
+    f_mount(NULL, "emmc:", 1);
+    nx_emmc_gpt_free(&gpt);
+    sdmmc_storage_end(&storage);
+
+    if (memcmp(pkg1_id->id, "2016", 4)) {
+        TPRINTFARGS("%kES & SSL keys...", colors[5]);
+    } else {
+        TPRINTFARGS("%kSSL keys...     ", colors[5]);
+    }
+
     // derive eticket_rsa_kek and ssl_rsa_kek
     if (_key_exists(es_keys[0]) && _key_exists(es_keys[1]) && _key_exists(master_key[0])) {
         for (u32 i = 0; i < 0x10; i++)
@@ -807,14 +820,6 @@ pkg2_done:
         _generate_kek(8, es_keys[2], master_key[0], temp_key, NULL);
         se_aes_crypt_block_ecb(8, 0, ssl_rsa_kek, ssl_keys[1]);
     }
-
-dismount:
-    f_mount(NULL, "emmc:", 1);
-    nx_emmc_gpt_free(&gpt);
-    sdmmc_storage_end(&storage);
-
-    gfx_con_setpos(&gfx_con, x - 16, y);
-    TPRINTFARGS("%k", colors[5]);
 
 key_output: ;
     char *text_buffer = (char *)calloc(0x4000, 1);
@@ -904,8 +909,8 @@ static void _save_key(const char *name, const void *data, const u32 len, char *o
     if (!_key_exists(data))
         return;
     *buf_index += _sprintf(outbuf + *buf_index, "%s = ", name);
-    for (u32 i = 0; i < len; i += 4)
-        *buf_index += _sprintf(outbuf + *buf_index, "%08x", byte_swap_32(_REG(data, i)));
+    for (u32 i = 0; i < len; i++)
+        *buf_index += _sprintf(outbuf + *buf_index, "%02x", *(u8*)(data + i));
     *buf_index += _sprintf(outbuf + *buf_index, "\n");
     _key_count++;
 }

@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-build/
-output/
-=======
 .vscode
 build
 output
 research
->>>>>>> Add .gitignore

@@ -22,6 +22,7 @@
 #include "../hos/sept.h"
 #include "../libs/fatfs/ff.h"
 #include "../mem/heap.h"
+#include "../mem/mc.h"
 #include "../mem/sdram.h"
 #include "../sec/se.h"
 #include "../sec/se_t210.h"
@@ -314,15 +315,19 @@ get_tsec: ;
 
     int res = 0;
 
+    mc_disable_ahb_redirect();
+
     while (tsec_query(tsec_keys, pkg1_id->kb, &tsec_ctxt) < 0) {
         memset(tsec_keys, 0x00, 0x20);
         retries++;
-        if (retries > 3) {
+        if (retries > 15) {
             res = -1;
             break;
         }
     }
     free(pkg1);
+
+    mc_enable_ahb_redirect();
 
     if (res < 0) {
         EPRINTFARGS("ERROR %x dumping TSEC.\n", res);

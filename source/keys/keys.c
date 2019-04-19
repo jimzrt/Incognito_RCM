@@ -231,8 +231,8 @@ void dump_keys() {
     gfx_clear_partial_grey(0x1B, 0, 1280);
     gfx_con_setpos(0, 0);
 
-    gfx_printf("[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d%k]\n\n",
-        colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, 0xFFCCCCCC);
+    gfx_printf("[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d.%d%k]\n\n",
+        colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
     u32 start_time = get_tmr_ms(),
         end_time,

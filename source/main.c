@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
  *
- * Copyright (c) 2018 CTCaer
+ * Copyright (c) 2018-2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -74,32 +74,29 @@ void sd_unmount()
     }
 }
 
-void *sd_file_read(char *path)
+void *sd_file_read(const char *path, u32 *fsize)
 {
-    FIL fp;
-    if (f_open(&fp, path, FA_READ) != FR_OK)
-        return NULL;
+	FIL fp;
+	if (f_open(&fp, path, FA_READ) != FR_OK)
+		return NULL;
 
-    u32 size = f_size(&fp);
-    void *buf = malloc(size);
+	u32 size = f_size(&fp);
+	if (fsize)
+		*fsize = size;
 
-    u8 *ptr = buf;
-    while (size > 0)
-    {
-        u32 rsize = MIN(size, 512 * 512);
-        if (f_read(&fp, ptr, rsize, NULL) != FR_OK)
-        {
-            free(buf);
-            return NULL;
-        }
+	void *buf = malloc(size);
 
-        ptr += rsize;
-        size -= rsize;
-    }
+	if (f_read(&fp, buf, size, NULL) != FR_OK)
+	{
+		free(buf);
+		f_close(&fp);
 
-    f_close(&fp);
+		return NULL;
+	}
 
-    return buf;
+	f_close(&fp);
+
+	return buf;
 }
 
 int sd_save_to_file(void *buf, u32 size, const char *filename)
@@ -150,8 +147,8 @@ void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
 
 extern void pivot_stack(u32 stack_top);
 
-void ipl_main() {
-
+void ipl_main()
+{
     config_hw();
     pivot_stack(IPL_STACK_TOP);
     heap_init(IPL_HEAP_START);

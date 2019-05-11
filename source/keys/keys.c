@@ -41,7 +41,6 @@
 
 extern bool sd_mount();
 extern void sd_unmount();
-extern void *sd_file_read(char *path);
 extern int  sd_save_to_file(void *buf, u32 size, const char *filename);
 extern void power_off();
 extern void reboot_normal();
@@ -228,7 +227,7 @@ static u32  _sprintf(char *buffer, const char *fmt, ...);
 
 void dump_keys() {
     display_backlight_brightness(100, 1000);
-    gfx_clear_partial_grey(0x1B, 0, 1280);
+    gfx_clear_grey(0x1B);
     gfx_con_setpos(0, 0);
 
     gfx_printf("[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d.%d%k]\n\n",
@@ -764,14 +763,14 @@ pkg2_done:
     }
     f_close(&fp);
 
-    if (f_open(&fp, "emmc:/save/8000000000000043", FA_READ | FA_OPEN_EXISTING) || f_stat("emmc:/save/8000000000000043", &fno)) {
+    if (f_open(&fp, "emmc:/save/8000000000000043", FA_READ | FA_OPEN_EXISTING)) {
         EPRINTF("Failed to open ns_appman save.");
         goto dismount;
     }
 
     // locate sd seed
     u8 read_buf[0x20] = {0};
-    for (u32 i = 0; i < fno.fsize; i += 0x4000) {
+    for (u32 i = 0; i < f_size(&fp); i += 0x4000) {
         if (f_lseek(&fp, i) || f_read(&fp, read_buf, 0x20, &read_bytes) || read_bytes != 0x20)
             break;
         if (!memcmp(temp_key, read_buf, 0x10)) {

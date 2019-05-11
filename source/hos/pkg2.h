@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (C) 2018 CTCaer
+ * Copyright (C) 2018-2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -25,6 +25,8 @@
 #define PKG2_SEC_BASE 0x80000000
 #define PKG2_SEC_KERNEL 0
 #define PKG2_SEC_INI1 1
+
+#define PKG2_NEWKERN_INI1_START 0x168
 
 typedef struct _pkg2_hdr_t
 {

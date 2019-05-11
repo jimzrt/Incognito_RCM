@@ -80,7 +80,8 @@ typedef struct __attribute__((__packed__)) _boot_cfg_t
 	u8  autoboot;
 	u8  autoboot_list;
 	u8  extra_cfg;
-	u8  rsvd[128];
+	u32 sd_timeoff;
+	u8  rsvd[124];
 } boot_cfg_t;
 
 typedef struct __attribute__((__packed__)) _reloc_meta_t

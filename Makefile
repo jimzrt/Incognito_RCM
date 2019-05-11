@@ -4,55 +4,56 @@ endif
 
 include $(DEVKITARM)/base_rules
 
-IPL_LOAD_ADDR := 0x40003000
+################################################################################
 
-TARGET := Lockpick_RCM
+IPL_LOAD_ADDR := 0x40003000
 LPVERSION_MAJOR := 1
 LPVERSION_MINOR := 1
 LPVERSION_BUGFX := 1
 
-BUILD := build
-OUTPUT := output
+################################################################################
+
+TARGET := Lockpick_RCM
+BUILDDIR := build
+OUTPUTDIR := output
 SOURCEDIR = source
 VPATH = $(dir $(wildcard ./$(SOURCEDIR)/*/)) $(dir $(wildcard ./$(SOURCEDIR)/*/*/))
 
-OBJS = $(addprefix $(BUILD)/$(TARGET)/, \
+# Main and graphics.
+OBJS = $(addprefix $(BUILDDIR)/$(TARGET)/, \
 	start.o \
-	main.o \
+	main.o heap.o \
 	keys.o \
-	heap.o \
-	btn.o \
-	clock.o \
-	cluster.o \
-	fuse.o \
-	gpio.o \
-	sept.o \
-	i2c.o \
-	max7762x.o \
-	max17050.o \
-	mc.o \
-	nx_emmc.o \
-	sdmmc.o \
-	sdmmc_driver.o \
-	sdram.o \
-	sdram_lp0.o \
-	util.o \
-	di.o \
 	gfx.o \
-	pinmux.o \
-	pkg1.o \
-	pkg2.o \
-	se.o \
-	tsec.o \
-	hw_init.o \
-	smmu.o \
-	max77620-rtc.o \
 )
 
-OBJS += $(addprefix $(BUILD)/$(TARGET)/, \
+# Hardware.
+OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
+	clock.o cluster.o di.o gpio.o i2c.o mc.o sdram.o sdram_lp0.o pinmux.o se.o smmu.o tsec.o \
+	fuse.o \
+	sdmmc.o sdmmc_driver.o \
+	max17050.o max7762x.o max77620-rtc.o \
+	hw_init.o \
+)
+
+# Utilities.
+OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
+	btn.o util.o \
+)
+
+# Horizon.
+OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
+	nx_emmc.o \
+	pkg1.o pkg2.o sept.o \
+)
+
+# Libraries.
+OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
 	lz.o blz.o \
 	diskio.o ff.o ffunicode.o ffsystem.o \
 )
+
+################################################################################
 
 CUSTOMDEFINES := -DIPL_LOAD_ADDR=$(IPL_LOAD_ADDR)
 CUSTOMDEFINES += -DLP_VER_MJ=$(LPVERSION_MAJOR) -DLP_VER_MN=$(LPVERSION_MINOR) -DLP_VER_BF=$(LPVERSION_BUGFX)
@@ -63,32 +64,34 @@ LDFLAGS = $(ARCH) -nostartfiles -lgcc -Wl,--nmagic,--gc-sections -Xlinker --defs
 
 MODULEDIRS := $(wildcard modules/*)
 
+################################################################################
+
 .PHONY: all clean $(MODULEDIRS)
 
 all: $(TARGET).bin
 	@echo -n "Payload size is "
-	@wc -c < $(OUTPUT)/$(TARGET).bin
+	@wc -c < $(OUTPUTDIR)/$(TARGET).bin
 	@echo "Max size is 126296 Bytes."
 
 clean:
 	@rm -rf $(OBJS)
-	@rm -rf $(BUILD)
-	@rm -rf $(OUTPUT)
+	@rm -rf $(BUILDDIR)
+	@rm -rf $(OUTPUTDIR)
 
 $(MODULEDIRS):
 	$(MAKE) -C $@ $(MAKECMDGOALS)
 
-$(TARGET).bin: $(BUILD)/$(TARGET)/$(TARGET).elf $(MODULEDIRS)
-	$(OBJCOPY) -S -O binary $< $(OUTPUT)/$@
+$(TARGET).bin: $(BUILDDIR)/$(TARGET)/$(TARGET).elf $(MODULEDIRS)
+	$(OBJCOPY) -S -O binary $< $(OUTPUTDIR)/$@
 
-$(BUILD)/$(TARGET)/$(TARGET).elf: $(OBJS)
+$(BUILDDIR)/$(TARGET)/$(TARGET).elf: $(OBJS)
 	$(CC) $(LDFLAGS) -T $(SOURCEDIR)/link.ld $^ -o $@
 
-$(BUILD)/$(TARGET)/%.o: %.c
+$(BUILDDIR)/$(TARGET)/%.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD)/$(TARGET)/%.o: %.S
-	@mkdir -p "$(BUILD)"
-	@mkdir -p "$(BUILD)/$(TARGET)"
-	@mkdir -p "$(OUTPUT)"
+$(BUILDDIR)/$(TARGET)/%.o: %.S
+	@mkdir -p "$(BUILDDIR)"
+	@mkdir -p "$(BUILDDIR)/$(TARGET)"
+	@mkdir -p "$(OUTPUTDIR)"
 	$(CC) $(CFLAGS) -c $< -o $@

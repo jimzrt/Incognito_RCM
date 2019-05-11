@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (C) 2018 CTCaer
+ * Copyright (C) 2018-2019 CTCaer
  * Copyright (c) 2019 shchmue
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -306,7 +306,7 @@ static void _gfx_putn(u32 v, int base, char fill, int fcnt)
 	gfx_puts(p);
 }
 
-void gfx_put_small_sep(gfx_con_t *con)
+void gfx_put_small_sep()
 {
 	u8 prevFontSize = gfx_con.fntsz;
 	gfx_con.fntsz = 8;
@@ -314,7 +314,7 @@ void gfx_put_small_sep(gfx_con_t *con)
 	gfx_con.fntsz = prevFontSize;
 }
 
-void gfx_put_big_sep(gfx_con_t *con)
+void gfx_put_big_sep()
 {
 	u8 prevFontSize = gfx_con.fntsz;
 	gfx_con.fntsz = 16;

@@ -17,19 +17,21 @@
 
 #include <string.h>
 
-#include "sdmmc.h"
-#include "../utils/util.h"
-#include "../soc/clock.h"
 #include "mmc.h"
+#include "sdmmc.h"
+#include "../gfx/gfx.h"
 #include "../power/max7762x.h"
-#include "../soc/t210.h"
-#include "../soc/pmc.h"
-#include "../soc/pinmux.h"
+#include "../soc/clock.h"
 #include "../soc/gpio.h"
+#include "../soc/pinmux.h"
+#include "../soc/pmc.h"
+#include "../soc/t210.h"
+#include "../utils/util.h"
 
-/*#include "gfx.h"
-#define DPRINTF(...) gfx_printf(__VA_ARGS__)*/
+//#define DPRINTF(...) gfx_printf(__VA_ARGS__)
 #define DPRINTF(...)
+
+extern boot_cfg_t b_cfg;
 
 /*! SCMMC controller base addresses. */
 static const u32 _sdmmc_bases[4] = {
@@ -116,7 +118,7 @@ static int _sdmmc_config_ven_ceata_clk(sdmmc_t *sdmmc, u32 id)
 
 	if (id == 4)
 		sdmmc->regs->venceatactl = (sdmmc->regs->venceatactl & 0xFFFFC0FF) | 0x2800;
-	sdmmc->regs->field_1C0 &= 0xFFFDFFFF;
+	sdmmc->regs->ventunctl0 &= 0xFFFDFFFF;
 	if (id == 4)
 	{
 		if (!sdmmc->venclkctl_set)
@@ -168,11 +170,11 @@ static int _sdmmc_wait_type4(sdmmc_t *sdmmc)
 		sdmmc->regs->clkcon |= TEGRA_MMC_CLKCON_SD_CLOCK_ENABLE;
 	}
 
-	sdmmc->regs->field_1B0 |= 0x80000000;
+	sdmmc->regs->vendllcal |= 0x80000000;
 	_sdmmc_get_clkcon(sdmmc);
 
 	u32 timeout = get_tmr_ms() + 5;
-	while (sdmmc->regs->field_1B0 & 0x80000000)
+	while (sdmmc->regs->vendllcal & 0x80000000)
 	{
 		if (get_tmr_ms() > timeout)
 		{
@@ -182,7 +184,7 @@ static int _sdmmc_wait_type4(sdmmc_t *sdmmc)
 	}
 
 	timeout = get_tmr_ms() + 10;
-	while (sdmmc->regs->field_1BC & 0x80000000)
+	while (sdmmc->regs->dllcfgstatus & 0x80000000)
 	{
 		if (get_tmr_ms() > timeout)
 		{
@@ -561,9 +563,9 @@ int sdmmc_config_tuning(sdmmc_t *sdmmc, u32 type, u32 cmd)
 		return 0;
 	}
 
-	sdmmc->regs->field_1C0 = (sdmmc->regs->field_1C0 & 0xFFFF1FFF) | flag;
-	sdmmc->regs->field_1C0 = (sdmmc->regs->field_1C0 & 0xFFFFE03F) | 0x40;
-	sdmmc->regs->field_1C0 |= 0x20000;
+	sdmmc->regs->ventunctl0 = (sdmmc->regs->ventunctl0 & 0xFFFF1FFF) | flag;
+	sdmmc->regs->ventunctl0 = (sdmmc->regs->ventunctl0 & 0xFFFFE03F) | 0x40;
+	sdmmc->regs->ventunctl0 |= 0x20000;
 	sdmmc->regs->hostctl2  |= SDHCI_CTRL_EXEC_TUNING;
 
 	for (u32 i = 0; i < max; i++)
@@ -1000,8 +1002,8 @@ int sdmmc_init(sdmmc_t *sdmmc, u32 id, u32 power, u32 bus_width, u32 type, int n
 	sdmmc->clock_stopped = 0;
 
 	//TODO: make this skip-able.
-	sdmmc->regs->field_1F0 |= 0x80000;
-	sdmmc->regs->field_1AC &= 0xFFFFFFFB;
+	sdmmc->regs->iospare |= 0x80000;
+	sdmmc->regs->veniotrimctl &= 0xFFFFFFFB;
 	static const u32 trim_values[] = { 2, 8, 3, 8 };
 	sdmmc->regs->venclkctl = (sdmmc->regs->venclkctl & 0xE0FFFFFF) | (trim_values[sdmmc->id] << 24);
 	sdmmc->regs->sdmemcmppadctl = (sdmmc->regs->sdmemcmppadctl & 0xF) | 7;
@@ -1036,7 +1038,9 @@ void sdmmc_end(sdmmc_t *sdmmc)
 		if (sdmmc->id == SDMMC_1)
 		{
 			gpio_output_enable(GPIO_PORT_E, GPIO_PIN_4, GPIO_OUTPUT_DISABLE);
-			msleep(1); // To power cycle min 1ms without power is needed.
+			max77620_regulator_enable(REGULATOR_LDO2, 0);
+			b_cfg.sd_timeoff = get_tmr_ms(); // Some sandisc U1 cards need 100ms for a power cycle.
+			msleep(1); // To power cycle, min 1ms without power is needed.
 		}
 
 		_sdmmc_get_clkcon(sdmmc);

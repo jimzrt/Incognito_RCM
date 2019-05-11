@@ -90,7 +90,7 @@ int reboot_to_sept(const u8 *tsec_fw)
 	}
 	f_close(&fp);
 
-	// Save auto boot config to payload, if any.
+	// Save auto boot config to sept payload, if any.
 	boot_cfg_t *tmp_cfg = malloc(sizeof(boot_cfg_t));
 	memcpy(tmp_cfg, &b_cfg, sizeof(boot_cfg_t));
 
@@ -125,10 +125,8 @@ int reboot_to_sept(const u8 *tsec_fw)
 
 	(*sept)();
 
-	return 1;
-
 error:
-	EPRINTF("Sept payloads not found in sd:/sept!\nPlace appropriate files and try again.");
+	EPRINTF("Sept files not found in sd:/sept!\nPlace appropriate files and try again.");
 	display_backlight_brightness(100, 1000);
 
 	btn_wait();

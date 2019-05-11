@@ -28,7 +28,7 @@
 #include "../mem/mc.h"
 #include "../utils/util.h"
 
-/* #include "../gfx/gfx.h" */
+// #include "../gfx/gfx.h"
 
 static int _tsec_dma_wait_idle()
 {
@@ -187,7 +187,8 @@ int tsec_query(u8 *tsec_keys, u8 kb, tsec_ctxt_t *tsec_ctxt)
 		{
 			smmu_flush_all();
 
-			if (k != se[SE_KEYTABLE_DATA0_REG_OFFSET / 4]) {
+			if (k != se[SE_KEYTABLE_DATA0_REG_OFFSET / 4])
+			{
 				k = se[SE_KEYTABLE_DATA0_REG_OFFSET / 4];
 				key[kidx++] = k;
 			}

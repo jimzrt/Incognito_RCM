@@ -252,6 +252,19 @@ void dump_keys() {
         goto out_wait;
     }
 
+    bool found_tsec_fw = false;
+    for (const u32 *pos = (const u32 *)pkg1; (u8 *)pos < pkg1 + 0x40000; pos += 0x100 / sizeof(u32)) {
+        if (*pos == 0xCF42004D) {
+            tsec_ctxt.fw = (u8 *)pos;
+            found_tsec_fw = true;
+            break;
+        }
+    }
+    if (!found_tsec_fw) {
+        EPRINTF("Failed to locate TSEC firmware.");
+        goto out_wait;
+    }
+
     u32 MAX_KEY = 6;
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
         MAX_KEY = pkg1_id->kb + 1;
@@ -281,7 +294,7 @@ void dump_keys() {
             gfx_printf("%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
             gfx_printf("\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
             sdmmc_storage_end(&storage);
-            if (!reboot_to_sept((u8 *)pkg1 + pkg1_id->tsec_off))
+            if (!reboot_to_sept((u8 *)tsec_ctxt.fw))
                 goto out_wait;
         } else {
             se_aes_key_read(12, master_key[pkg1_id->kb], 0x10);
@@ -291,17 +304,10 @@ void dump_keys() {
 get_tsec: ;
     u8 tsec_keys[0x10 * 2] = {0};
 
-    tsec_ctxt.fw = (u8 *)pkg1 + pkg1_id->tsec_off;
+    tsec_key_data_t *key_data = (tsec_key_data_t *)(tsec_ctxt.fw + TSEC_KEY_DATA_ADDR);
     tsec_ctxt.pkg1 = pkg1;
-    tsec_ctxt.pkg11_off = pkg1_id->pkg11_off;
-    tsec_ctxt.secmon_base = pkg1_id->secmon_base;
-
-    if (pkg1_id->kb <= KB_FIRMWARE_VERSION_600)
-        tsec_ctxt.size = 0xF00;
-    else if (pkg1_id->kb == KB_FIRMWARE_VERSION_620)
-        tsec_ctxt.size = 0x2900;
-    else {
-        tsec_ctxt.size = 0x3000;
+    tsec_ctxt.size = 0x100 + key_data->blob0_size + key_data->blob1_size + key_data->blob2_size + key_data->blob3_size + key_data->blob4_size;
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
         // Exit after TSEC key generation.
         *((vu16 *)((u32)tsec_ctxt.fw + 0x2DB5)) = 0x02F8;
     }

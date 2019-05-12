@@ -118,7 +118,7 @@ int tsec_query(u8 *tsec_keys, u8 kb, tsec_ctxt_t *tsec_ctxt)
 	{
 		// Init SMMU translation for TSEC.
 		pdir = smmu_init_for_tsec();
-		smmu_init(tsec_ctxt->secmon_base);
+		smmu_init(0x4002B000);
 		// Enable SMMU
 		if (!smmu_is_used())
 			smmu_enable();
@@ -161,7 +161,7 @@ int tsec_query(u8 *tsec_keys, u8 kb, tsec_ctxt_t *tsec_ctxt)
 		iram = page_alloc(0x30);
 		memcpy(iram, tsec_ctxt->pkg1, 0x30000);
 		// PKG1.1 magic offset.
-		pkg11_magic_off = (u32 *)(iram + ((tsec_ctxt->pkg11_off + 0x20) / 4));
+		pkg11_magic_off = (u32 *)(iram + (0x7000 / 4));
 		smmu_map(pdir, 0x40010000, (u32)iram, 0x30, _READABLE | _WRITABLE | _NONSECURE);
 
 		// Exception vectors

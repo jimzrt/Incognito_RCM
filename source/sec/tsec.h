@@ -20,14 +20,30 @@
 
 #include "../utils/types.h"
 
+#define TSEC_KEY_DATA_ADDR 0x300
+
 typedef struct _tsec_ctxt_t
 {
 	void *fw;
 	u32 size;
 	void *pkg1;
-	u32 pkg11_off;
-	u32 secmon_base;
 } tsec_ctxt_t;
+
+typedef struct _tsec_key_data_t
+{
+	u8 debug_key[0x10];
+	u8 blob0_auth_hash[0x10];
+	u8 blob1_auth_hash[0x10];
+	u8 blob2_auth_hash[0x10];
+	u8 blob2_aes_iv[0x10];
+	u8 hovi_eks_seed[0x10];
+	u8 hovi_common_seed[0x10];
+	u32 blob0_size;
+	u32 blob1_size;
+	u32 blob2_size;
+	u32 blob3_size;
+	u32 blob4_size;
+} tsec_key_data_t;
 
 int tsec_query(u8 *tsec_keys, u8 kb, tsec_ctxt_t *tsec_ctxt);
 

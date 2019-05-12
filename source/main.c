@@ -49,7 +49,7 @@ bool sd_mount()
     else
     {
         int res = 0;
-        res = f_mount(&sd_fs, "", 1);
+        res = f_mount(&sd_fs, "sd:", 1);
         if (res == FR_OK)
         {
             sd_mounted = 1;
@@ -68,7 +68,7 @@ void sd_unmount()
 {
     if (sd_mounted)
     {
-        f_mount(NULL, "", 1);
+        f_mount(NULL, "sd:", 1);
         sdmmc_storage_end(&sd_storage);
         sd_mounted = false;
     }

@@ -23,9 +23,6 @@ typedef struct _pkg1_id_t
 {
 	const char *id;
 	u32 kb;
-	u32 tsec_off;
-	u32 pkg11_off;
-	u32 secmon_base;
 } pkg1_id_t;
 
 const pkg1_id_t *pkg1_identify(u8 *pkg1);

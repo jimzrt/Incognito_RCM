@@ -55,8 +55,8 @@ emmc_part_t *system_part;
 #define TPRINTFARGS(text, args...) \
     end_time = get_tmr_ms(); \
     gfx_printf(text" done @ %d.%03ds\n", args, (end_time - start_time) / 1000, (end_time - start_time) % 1000)
-#define SAVE_KEY(name, src, len) _save_key(name, src, len, text_buffer, &buf_index)
-#define SAVE_KEY_FAMILY(name, src, count, len) _save_key_family(name, src, count, len, text_buffer, &buf_index)
+#define SAVE_KEY(name, src, len) _save_key(name, src, len, text_buffer)
+#define SAVE_KEY_FAMILY(name, src, count, len) _save_key_family(name, src, count, len, text_buffer)
 
 static u8 temp_key[0x10],
           bis_key[4][0x20] = {0},
@@ -87,8 +87,8 @@ static const u32 colors[6] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN
 
 // key functions
 static bool   _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
-static void   _save_key(const char *name, const void *data, const u32 len, char *outbuf, u32 *buf_index);
-static void   _save_key_family(const char *name, const void *data, const u32 num_keys, const u32 len, char *outbuf, u32 *buf_index);
+static void   _save_key(const char *name, const void *data, const u32 len, char *outbuf);
+static void   _save_key_family(const char *name, const void *data, const u32 num_keys, const u32 len, char *outbuf);
 static void   _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed);
 // nca functions
 static void  *_nca_process(u32 hk_ks1, u32 hk_ks2, FIL *fp, u32 key_offset, u32 len);
@@ -682,8 +682,7 @@ dismount:
     }
 
 key_output: ;
-    char *text_buffer = (char *)calloc(0x4000, 1);
-    u32 buf_index = 0;
+    __attribute__ ((aligned (16))) char text_buffer[0x3000] = {0};
 
     SAVE_KEY("aes_kek_generation_source", aes_kek_generation_source, 0x10);
     SAVE_KEY("aes_key_generation_source", aes_key_generation_source, 0x10);
@@ -746,12 +745,11 @@ key_output: ;
     TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[0], _key_count, colors[1]);
 
     f_mkdir("switch");
-    if (!sd_save_to_file(text_buffer, buf_index, "sd:/switch/prod.keys"))
-        gfx_printf("%kWrote %d bytes to /switch/prod.keys\n", colors[2], buf_index);
-    else
+    if (!sd_save_to_file(text_buffer, strlen(text_buffer), "sd:/switch/prod.keys") && !f_stat("sd:/switch/prod.keys", &fno)) {
+        gfx_printf("%kWrote %d bytes to /switch/prod.keys\n", colors[2], (u32)fno.fsize);
+    } else
         EPRINTF("Failed to save keys to SD.");
     sd_unmount();
-    free(text_buffer);
 
 out_wait:
     gfx_printf("\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[3], colors[4], colors[5]);
@@ -765,21 +763,22 @@ out_wait:
         power_off();
 }
 
-static void _save_key(const char *name, const void *data, const u32 len, char *outbuf, u32 *buf_index) {
+static void _save_key(const char *name, const void *data, const u32 len, char *outbuf) {
     if (!_key_exists(data))
         return;
-    *buf_index += sprintf(outbuf + *buf_index, "%s = ", name);
+    u32 pos = strlen(outbuf);
+    pos += sprintf(&outbuf[pos], "%s = ", name);
     for (u32 i = 0; i < len; i++)
-        *buf_index += sprintf(outbuf + *buf_index, "%02x", *(u8*)(data + i));
-    *buf_index += sprintf(outbuf + *buf_index, "\n");
+        pos += sprintf(&outbuf[pos], "%02x", *(u8*)(data + i));
+    sprintf(&outbuf[pos], "\n");
     _key_count++;
 }
 
-static void _save_key_family(const char *name, const void *data, const u32 num_keys, const u32 len, char *outbuf, u32 *buf_index) {
+static void _save_key_family(const char *name, const void *data, const u32 num_keys, const u32 len, char *outbuf) {
     char temp_name[0x40] = {0};
     for (u32 i = 0; i < num_keys; i++) {
         sprintf(temp_name, "%s_%02x", name, i);
-        _save_key(temp_name, data + i * len, len, outbuf, buf_index);
+        _save_key(temp_name, data + i * len, len, outbuf);
     }
 }
 

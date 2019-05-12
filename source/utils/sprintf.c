@@ -116,6 +116,7 @@ u32 sprintf(char *buffer, const char *fmt, ...) {
     }
 
     out:
+    buffer[count] = 0;
     va_end(ap);
     return count;
 }

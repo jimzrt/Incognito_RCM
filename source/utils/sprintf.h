@@ -14,9 +14,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _KEYS_H_
-#define _KEYS_H_
+#ifndef _SPRINTF_H_
+#define _SPRINTF_H_
 
-void dump_keys();
+u32 sprintf(char *buffer, const char *fmt, ...);
 
 #endif

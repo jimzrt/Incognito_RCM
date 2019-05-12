@@ -32,7 +32,7 @@
 
 sdmmc_t sd_sdmmc;
 sdmmc_storage_t sd_storage;
-FATFS sd_fs;
+__attribute__ ((aligned (16))) FATFS sd_fs;
 static bool sd_mounted;
 
 boot_cfg_t __attribute__((section ("._boot_cfg"))) b_cfg;

@@ -38,7 +38,7 @@ OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
 
 # Utilities.
 OBJS += $(addprefix $(BUILDDIR)/$(TARGET)/, \
-	btn.o util.o \
+	btn.o sprintf.o util.o \
 )
 
 # Horizon.

@@ -25,7 +25,6 @@
 
 #include <string.h>
 #include "diskio.h"		/* FatFs lower layer API */
-#include "../../gfx/gfx.h"
 #include "../../mem/heap.h"
 #include "../../sec/se.h"
 #include "../../storage/nx_emmc.h"
@@ -37,10 +36,6 @@
 extern sdmmc_storage_t sd_storage;
 extern sdmmc_storage_t storage;
 extern emmc_part_t *system_part;
-
-typedef struct {
-	u64 b, a;
-} le128;
 
 typedef struct {
     u32 sector;
@@ -81,7 +76,6 @@ static inline void _gf256_mul_x_le(void *block) {
         pdata[0x0] ^= 0x87;
 }
 
-//8378ms before doing the block op all at once, 2179ms after!
 static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u64 sec, void *dst, void *src, u32 secsize) {
     int res = 0;
     u8 *pdst = (u8 *)dst;
@@ -151,9 +145,9 @@ DRESULT disk_read (
         return RES_ERROR;
 
     case 1:;
-        static u8 tweak[0x10];
-        static u64 prev_cluster = -1;
-        static u32 prev_sector = 0;
+        __attribute__ ((aligned (16))) static u8 tweak[0x10];
+        __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
+        __attribute__ ((aligned (16))) static u32 prev_sector = 0;
         u32 tweak_exp = 0;
         bool regen_tweak = true, cache_sector = false;
 
@@ -166,7 +160,6 @@ DRESULT disk_read (
                     memcpy(tweak, sector_cache[s].tweak, 0x10);
                     prev_sector = sector;
                     prev_cluster = sector / 0x20;
-                    //gfx_printf("addr %x sec %x count %x cached\n", sector * 0x200, sector, count);
                     return RES_OK;
                 }
             }
@@ -180,7 +173,6 @@ DRESULT disk_read (
         }
 
         if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
-            //gfx_hexdump(0, buff, 0x100);
             if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
                 prev_cluster = sector / 0x20;
                 tweak_exp = sector % 0x20;
@@ -192,13 +184,11 @@ DRESULT disk_read (
             }
 
             // fatfs will never pull more than a cluster
-            //gfx_printf("sec %6x count %2x tweak %2x\n", sector, count, tweak_exp);
             _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
             if (cache_sector) {
                 memcpy(sector_cache[s].cached_sector, buff, 0x200);
                 memcpy(sector_cache[s].tweak, tweak, 0x10);
             }
-            //gfx_hexdump(0, buff, 0x10);
             prev_sector = sector + count - 1;
             return RES_OK;
         }

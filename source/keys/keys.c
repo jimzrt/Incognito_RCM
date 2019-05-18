@@ -285,10 +285,6 @@ get_tsec: ;
     // Dump package2.
     u8 *pkg2 = NULL;
     pkg2_kip1_info_t *ki = NULL;
-    if (!_key_exists(master_key[pkg1_id->kb])) {
-        EPRINTF("Current master key not found.\nUnable to decrypt Package2.");
-        goto pkg2_done;
-    }
 
     sdmmc_storage_set_mmc_partition(&storage, 0);
     // Parse eMMC GPT.
@@ -318,14 +314,24 @@ get_tsec: ;
     pkg2 = malloc(pkg2_size_aligned);
     nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, pkg2_size_aligned / NX_EMMC_BLOCKSIZE, pkg2);
 
-    // Decrypt package2 and parse KIP1 blobs in INI1 section.
-    se_aes_key_set(8, master_key[pkg1_id->kb], 0x10);
-    se_aes_unwrap_key(8, 8, package2_key_source);
-    pkg2_hdr_t *pkg2_hdr = pkg2_decrypt(pkg2);
-    if (!pkg2_hdr) {
+    // Decrypt package2 and parse KIP1 blobs in INI1 section. Try all available key generations in case of pkg1/pkg2 mismatch.
+    pkg2_hdr_t *pkg2_hdr;
+    pkg2_hdr_t hdr;
+    u32 pkg2_kb;
+    for (pkg2_kb = 0; pkg2_kb < MAX_KEY; pkg2_kb++) {
+        se_aes_key_set(8, master_key[pkg2_kb], 0x10);
+        se_aes_unwrap_key(8, 8, package2_key_source);
+        memcpy(&hdr, pkg2 + 0x100, sizeof(pkg2_hdr_t));
+        se_aes_crypt_ctr(8, &hdr, sizeof(pkg2_hdr_t), &hdr, sizeof(pkg2_hdr_t), &hdr);
+        if (hdr.magic == PKG2_MAGIC)
+            break;
+    }
+    if (pkg2_kb == MAX_KEY) {
         EPRINTF("Failed to decrypt Package2.");
         goto pkg2_done;
-    }
+    } else if (pkg2_kb != pkg1_id->kb)
+        EPRINTF("Warning: Package1-Package2 mismatch.");
+    pkg2_hdr = pkg2_decrypt(pkg2);
 
     TPRINTFARGS("%kDecrypt pkg2... ", colors[2]);
 
@@ -745,8 +751,13 @@ key_output: ;
     TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[0], _key_count, colors[1]);
 
     f_mkdir("switch");
-    if (!sd_save_to_file(text_buffer, strlen(text_buffer), "sd:/switch/prod.keys") && !f_stat("sd:/switch/prod.keys", &fno)) {
-        gfx_printf("%kWrote %d bytes to /switch/prod.keys\n", colors[2], (u32)fno.fsize);
+    char keyfile_path[30] = "sd:/switch/";
+    if (!(fuse_read_odm(4) & 3))
+        sprintf(&keyfile_path[11], "prod.keys");
+    else
+        sprintf(&keyfile_path[11], "dev.keys");
+    if (!sd_save_to_file(text_buffer, strlen(text_buffer), keyfile_path) && !f_stat(keyfile_path, &fno)) {
+        gfx_printf("%kWrote %d bytes to %s\n", colors[2], (u32)fno.fsize, keyfile_path);
     } else
         EPRINTF("Failed to save keys to SD.");
     sd_unmount();

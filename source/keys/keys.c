@@ -634,19 +634,19 @@ pkg2_done:
     free(dec_header);
 
     if (f_open(&fp, "sd:/Nintendo/Contents/private", FA_READ | FA_OPEN_EXISTING)) {
-        EPRINTF("Failed to open SD seed verification file from SD.");
+        EPRINTF("Unable to locate SD seed. Skipping.");
         goto dismount;
     }
     // get sd seed verification vector
     if (f_read(&fp, temp_key, 0x10, &read_bytes) || read_bytes != 0x10) {
-        EPRINTF("Failed to read SD seed verification vector from SD.");
+        EPRINTF("Unable to locate SD seed. Skipping.");
         f_close(&fp);
         goto dismount;
     }
     f_close(&fp);
 
     if (f_open(&fp, "emmc:/save/8000000000000043", FA_READ | FA_OPEN_EXISTING)) {
-        EPRINTF("Failed to open ns_appman save.");
+        EPRINTF("Failed to open ns_appman save.\nSkipping SD seed.");
         goto dismount;
     }
 

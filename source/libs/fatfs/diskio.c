@@ -49,14 +49,14 @@ static sector_cache_t *sector_cache = (sector_cache_t*)0x40020000;
 static u32 secindex = 0;
 
 DSTATUS disk_status (
-    BYTE pdrv /* Physical drive nmuber to identify the drive */
+    BYTE pdrv /* Physical drive number to identify the drive */
 )
 {
     return 0;
 }
 
 DSTATUS disk_initialize (
-    BYTE pdrv /* Physical drive nmuber to identify the drive */
+    BYTE pdrv /* Physical drive number to identify the drive */
 )
 {
     return 0;
@@ -125,7 +125,7 @@ out:;
 }
 
 DRESULT disk_read (
-    BYTE pdrv,		/* Physical drive nmuber to identify the drive */
+    BYTE pdrv,		/* Physical drive number to identify the drive */
     BYTE *buff,		/* Data buffer to store read data */
     DWORD sector,	/* Start sector in LBA */
     UINT count		/* Number of sectors to read */
@@ -134,15 +134,7 @@ DRESULT disk_read (
     switch (pdrv)
     {
     case 0:
-        if ((u32)buff >= DRAM_START)
-            return sdmmc_storage_read(&sd_storage, sector, count, buff) ? RES_OK : RES_ERROR;
-        u8 *buf = (u8 *)SDMMC_UPPER_BUFFER;
-        if (sdmmc_storage_read(&sd_storage, sector, count, buf))
-        {
-            memcpy(buff, buf, 512 * count);
-            return RES_OK;
-        }
-        return RES_ERROR;
+        return sdmmc_storage_read(&sd_storage, sector, count, buff) ? RES_OK : RES_ERROR;
 
     case 1:;
         __attribute__ ((aligned (16))) static u8 tweak[0x10];
@@ -198,7 +190,7 @@ DRESULT disk_read (
 }
 
 DRESULT disk_write (
-    BYTE pdrv,			/* Physical drive nmuber to identify the drive */
+    BYTE pdrv,			/* Physical drive number to identify the drive */
     const BYTE *buff,	/* Data to be written */
     DWORD sector,		/* Start sector in LBA */
     UINT count			/* Number of sectors to write */
@@ -206,17 +198,11 @@ DRESULT disk_write (
 {
     if (pdrv == 1)
         return RES_WRPRT;
-    if ((u32)buff >= DRAM_START)
-        return sdmmc_storage_write(&sd_storage, sector, count, (void *)buff) ? RES_OK : RES_ERROR;
-    u8 *buf = (u8 *)SDMMC_UPPER_BUFFER; //TODO: define this somewhere.
-    memcpy(buf, buff, 512 * count);
-    if (sdmmc_storage_write(&sd_storage, sector, count, buf))
-        return RES_OK;
-    return RES_ERROR;
+    return sdmmc_storage_write(&sd_storage, sector, count, (void *)buff) ? RES_OK : RES_ERROR;
 }
 
 DRESULT disk_ioctl (
-    BYTE pdrv,		/* Physical drive nmuber (0..) */
+    BYTE pdrv,		/* Physical drive number (0..) */
     BYTE cmd,		/* Control code */
     void *buff		/* Buffer to send/receive control data */
 )

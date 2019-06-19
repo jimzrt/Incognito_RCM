@@ -19,6 +19,6 @@
 
 #include "../utils/types.h"
 
-int reboot_to_sept(const u8 *tsec_fw);
+int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb);
 
 #endif

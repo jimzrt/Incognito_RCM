@@ -135,6 +135,10 @@ void dump_keys() {
         goto out_wait;
     }
 
+    tsec_key_data_t *key_data = (tsec_key_data_t *)(tsec_ctxt.fw + TSEC_KEY_DATA_ADDR);
+    tsec_ctxt.pkg1 = pkg1;
+    tsec_ctxt.size = 0x100 + key_data->blob0_size + key_data->blob1_size + key_data->blob2_size + key_data->blob3_size + key_data->blob4_size;
+
     u32 MAX_KEY = 6;
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
         MAX_KEY = pkg1_id->kb + 1;
@@ -149,8 +153,8 @@ void dump_keys() {
             // bundle lp0 fw for sept instead of loading it from SD as hekate does
             sdram_lp0_save_params(sdram_get_params_patched());
             FIL fp;
-            if (f_stat("sd:/sept/sept-primary.bin", NULL) || f_stat("sd:/sept/sept-secondary.enc", NULL)) {
-                EPRINTF("On firmware 7.x or higher but no sept payload present\nSkipping new key derivation...");
+            if (f_stat("sd:/sept", NULL)) {
+                EPRINTF("On firmware 7.x+ but Sept missing.\nSkipping new key derivation...");
                 goto get_tsec;
             }
             // backup post-reboot payload
@@ -164,7 +168,7 @@ void dump_keys() {
             gfx_printf("%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
             gfx_printf("\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
             sdmmc_storage_end(&storage);
-            if (!reboot_to_sept((u8 *)tsec_ctxt.fw))
+            if (!reboot_to_sept((u8 *)tsec_ctxt.fw, tsec_ctxt.size, pkg1_id->kb))
                 goto out_wait;
         } else {
             se_aes_key_read(12, master_key[pkg1_id->kb], 0x10);
@@ -173,14 +177,6 @@ void dump_keys() {
 
 get_tsec: ;
     u8 tsec_keys[0x10 * 2] = {0};
-
-    tsec_key_data_t *key_data = (tsec_key_data_t *)(tsec_ctxt.fw + TSEC_KEY_DATA_ADDR);
-    tsec_ctxt.pkg1 = pkg1;
-    tsec_ctxt.size = 0x100 + key_data->blob0_size + key_data->blob1_size + key_data->blob2_size + key_data->blob3_size + key_data->blob4_size;
-    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
-        // Exit after TSEC key generation.
-        *((vu16 *)((u32)tsec_ctxt.fw + 0x2DB5)) = 0x02F8;
-    }
 
     if (pkg1_id->kb == KB_FIRMWARE_VERSION_620) {
         u8 *tsec_paged = (u8 *)page_alloc(3);
@@ -404,6 +400,7 @@ get_tsec: ;
             alignment = 8;
             break;
         case KB_FIRMWARE_VERSION_700:
+        case KB_FIRMWARE_VERSION_810:
             start_offset = 0x29c50;
             hks_offset_from_end -= 0x6a73;
             alignment = 8;
@@ -553,6 +550,7 @@ pkg2_done:
                 start_offset = 0x5674;
                 break;
             case KB_FIRMWARE_VERSION_700:
+            case KB_FIRMWARE_VERSION_810:
                 start_offset = 0x5563;
                 break;
             }
@@ -603,6 +601,7 @@ pkg2_done:
                 start_offset = 0x1d5be;
                 break;
             case KB_FIRMWARE_VERSION_700:
+            case KB_FIRMWARE_VERSION_810:
                 start_offset = 0x1d437;
                 break;
             }
@@ -716,6 +715,7 @@ key_output: ;
     SAVE_KEY_FAMILY("master_kek", master_kek, MAX_KEY, 0x10);
     SAVE_KEY("master_kek_source_06", master_kek_sources[0], 0x10);
     SAVE_KEY("master_kek_source_07", master_kek_sources[1], 0x10);
+    SAVE_KEY("master_kek_source_08", master_kek_sources[2], 0x10);
     SAVE_KEY_FAMILY("master_key", master_key, MAX_KEY, 0x10);
     SAVE_KEY("master_key_source", master_key_source, 0x10);
     SAVE_KEY_FAMILY("package1_key", package1_key, 6, 0x10);

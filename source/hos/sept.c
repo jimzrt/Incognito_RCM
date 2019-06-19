@@ -59,15 +59,15 @@ extern boot_cfg_t b_cfg;
 extern void sd_unmount();
 extern void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size);
 
-int reboot_to_sept(const u8 *tsec_fw)
+int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 {
 	FIL fp;
 
 	// Copy warmboot reboot code and TSEC fw.
 	memcpy((u8 *)(SEPT_PK1T_ADDR - WB_RST_SIZE), (u8 *)warmboot_reboot, sizeof(warmboot_reboot));
-	memcpy((void *)SEPT_PK1T_ADDR, tsec_fw, 0x3000);
-	*(vu32 *)SEPT_TCSZ_ADDR = 0x3000;
-	
+	memcpy((void *)SEPT_PK1T_ADDR, tsec_fw, tsec_size);
+	*(vu32 *)SEPT_TCSZ_ADDR = tsec_size;
+
 	// Copy sept-primary.
 	if (f_open(&fp, "sd:/sept/sept-primary.bin", FA_READ))
 		goto error;
@@ -80,7 +80,9 @@ int reboot_to_sept(const u8 *tsec_fw)
 	f_close(&fp);
 
 	// Copy sept-secondary.
-	if (f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ))
+	if ((kb == 7) && f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ) && f_open(&fp, "sd:/sept/sept-secondary_00.enc", FA_READ))
+		goto error;
+	else if ((kb == 8) && f_open(&fp, "sd:/sept/sept-secondary_01.enc", FA_READ))
 		goto error;
 
 	if (f_read(&fp, (u8 *)SEPT_STG2_ADDR, f_size(&fp), NULL))

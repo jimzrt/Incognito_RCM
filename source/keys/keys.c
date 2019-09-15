@@ -537,7 +537,7 @@ pkg2_done:
     FIL fp;
     // sysmodule NCAs only ever have one section (exefs) so 0x600 is sufficient
     u8 *dec_header = (u8*)malloc(0x600);
-    char path[100] = "sd:/test/nca1111111111111";//"emmc:/Contents/registered";
+    char path[100] = "emmc:/Contents/registered";
     u32 titles_found = 0, title_limit = 2, read_bytes = 0;
     if (!memcmp(pkg1_id->id, "2016", 4))
         title_limit = 1;

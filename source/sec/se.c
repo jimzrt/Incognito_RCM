@@ -21,6 +21,7 @@
 
 #include "../sec/se.h"
 #include "../mem/heap.h"
+#include "../soc/bpmp.h"
 #include "../soc/t210.h"
 #include "../sec/se_t210.h"
 #include "../utils/util.h"
@@ -108,9 +109,13 @@ static int _se_execute(u32 op, void *dst, u32 dst_size, const void *src, u32 src
 
 	SE(SE_ERR_STATUS_0) = SE(SE_ERR_STATUS_0);
 	SE(SE_INT_STATUS_REG_OFFSET) = SE(SE_INT_STATUS_REG_OFFSET);
-	SE(SE_OPERATION_REG_OFFSET) = SE_OPERATION(op);
 
+	bpmp_mmu_maintenance(BPMP_MMU_MAINT_CLN_INV_WAY);
+
+	SE(SE_OPERATION_REG_OFFSET) = SE_OPERATION(op);
 	int res = _se_wait();
+
+	bpmp_mmu_maintenance(BPMP_MMU_MAINT_CLN_INV_WAY);
 
 	if (src)
 		free(ll_src);
@@ -227,18 +232,7 @@ int se_aes_crypt_ecb(u32 ks, u32 enc, void *dst, u32 dst_size, const void *src, 
 
 int se_aes_crypt_block_ecb(u32 ks, u32 enc, void *dst, const void *src)
 {
-	if (enc)
-	{
-		SE(SE_CONFIG_REG_OFFSET) = SE_CONFIG_ENC_ALG(ALG_AES_ENC) | SE_CONFIG_DST(DST_MEMORY);
-		SE(SE_CRYPTO_REG_OFFSET) = SE_CRYPTO_KEY_INDEX(ks) | SE_CRYPTO_CORE_SEL(CORE_ENCRYPT);
-	}
-	else
-	{
-		SE(SE_CONFIG_REG_OFFSET) = SE_CONFIG_DEC_ALG(ALG_AES_DEC) | SE_CONFIG_DST(DST_MEMORY);
-		SE(SE_CRYPTO_REG_OFFSET) = SE_CRYPTO_KEY_INDEX(ks) | SE_CRYPTO_CORE_SEL(CORE_DECRYPT);
-	}
-	SE(SE_BLOCK_COUNT_REG_OFFSET) = 0;
-	return _se_execute(OP_START, dst, 0x10, src, 0x10);
+	return se_aes_crypt_ecb(ks, enc, dst, 0x10, src, 0x10);
 }
 
 int se_aes_crypt_ctr(u32 ks, void *dst, u32 dst_size, const void *src, u32 src_size, void *ctr)

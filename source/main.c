@@ -24,6 +24,7 @@
 #include "mem/heap.h"
 #include "power/max77620.h"
 #include "rtc/max77620-rtc.h"
+#include "soc/bpmp.h"
 #include "soc/hw_init.h"
 #include "storage/sdmmc.h"
 #include "utils/util.h"
@@ -107,7 +108,7 @@ int sd_save_to_file(void *buf, u32 size, const char *filename)
     if (res)
     {
         EPRINTFARGS("Error (%d) creating file\n%s.\n", res, filename);
-        return 1;
+        return res;
     }
 
     f_write(&fp, buf, size, NULL);
@@ -158,6 +159,8 @@ void ipl_main()
     gfx_init_ctxt(fb, 720, 1280, 720);
     gfx_con_init();
     display_backlight_pwm_init();
+
+    bpmp_clk_rate_set(BPMP_CLK_SUPER_BOOST);
 
     sd_mount();
     dump_keys();

@@ -78,12 +78,18 @@ typedef int bool;
 
 typedef struct __attribute__((__packed__)) _boot_cfg_t
 {
-	u8  boot_cfg;
-	u8  autoboot;
-	u8  autoboot_list;
-	u8  extra_cfg;
-	u32 sd_timeoff;
-	u8  rsvd[124];
+	u8 boot_cfg;
+	u8 autoboot;
+	u8 autoboot_list;
+	u8 extra_cfg;
+	union
+	{
+		struct
+		{
+			char id[8];
+		};
+		u8 xt_str[0x80];
+	};
 } boot_cfg_t;
 
 typedef struct __attribute__((__packed__)) _reloc_meta_t

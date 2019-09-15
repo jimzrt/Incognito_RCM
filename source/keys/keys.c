@@ -290,6 +290,7 @@ get_tsec: ;
     /*  key = unwrap(source, wrapped_key):
         key_set(ks, wrapped_key), block_ecb(ks, 0, key, source) -> final key in key
     */
+   // TODO: fix bis key generation for newer unpatched consoles
     if (_key_exists(device_key)) {
         se_aes_key_set(8, device_key, 0x10);
         se_aes_unwrap_key(8, 8, retail_specific_aes_key_source); // kek = unwrap(rsaks, devkey)

@@ -100,7 +100,7 @@ void dump_keys() {
     gfx_clear_grey(0x1B);
     gfx_con_setpos(0, 0);
 
-    gfx_printf("[%kLo%kck%kpi%kck%k-R%kCM%k v%d.%d.%d%k]\n\n",
+    gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
         colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
     u32 start_time = get_tmr_ms(),
@@ -140,8 +140,9 @@ void dump_keys() {
     tsec_ctxt.size = 0x100 + key_data->blob0_size + key_data->blob1_size + key_data->blob2_size + key_data->blob3_size + key_data->blob4_size;
 
     u32 MAX_KEY = 6;
-    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620) {
         MAX_KEY = pkg1_id->kb + 1;
+    }
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
         if (!f_stat("sd:/sept/payload.bak", NULL)) {
@@ -171,7 +172,7 @@ void dump_keys() {
             if (!reboot_to_sept((u8 *)tsec_ctxt.fw, tsec_ctxt.size, pkg1_id->kb))
                 goto out_wait;
         } else {
-            se_aes_key_read(12, master_key[pkg1_id->kb], 0x10);
+            se_aes_key_read(12, master_key[KB_FIRMWARE_VERSION_MAX], 0x10);
         }
     }
 
@@ -215,11 +216,36 @@ get_tsec: ;
         se_aes_crypt_block_ecb(8, 0, master_key[6], master_key_source);
     }
 
-    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620 && _key_exists(master_key[pkg1_id->kb])) {
-        // derive all lower master keys in the event keyblobs are bad
-        for (u32 i = pkg1_id->kb; i > 0; i--) {
-            se_aes_key_set(8, master_key[i], 0x10);
-            se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620) {
+        // derive all lower master keys in case keyblobs are bad
+        if (_key_exists(master_key[pkg1_id->kb])) {
+            for (u32 i = pkg1_id->kb; i > 0; i--) {
+                se_aes_key_set(8, master_key[i], 0x10);
+                se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
+            }
+            se_aes_key_set(8, master_key[0], 0x10);
+            se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
+            if (_key_exists(temp_key)) {
+                EPRINTFARGS("Failed to derive master key. kb = %d", pkg1_id->kb);
+            }
+        } else if (_key_exists(master_key[KB_FIRMWARE_VERSION_MAX])) {
+            // handle sept version differences
+            for (u32 kb = KB_FIRMWARE_VERSION_MAX; kb >= KB_FIRMWARE_VERSION_620; kb--) {
+                for (u32 i = kb; i > 0; i--) {
+                    se_aes_key_set(8, master_key[i], 0x10);
+                    se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
+                }
+                se_aes_key_set(8, master_key[0], 0x10);
+                se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
+                if (!_key_exists(temp_key)) {
+                    break;
+                }
+                memcpy(master_key[kb-1], master_key[kb], 0x10);
+                memcpy(master_key[kb], zeros, 0x10);
+            }
+            if (_key_exists(temp_key)) {
+                EPRINTF("Failed to derive master key.");
+            }
         }
     }
 
@@ -323,16 +349,22 @@ get_tsec: ;
             break;
     }
     if (pkg2_kb == MAX_KEY) {
-        EPRINTF("Failed to decrypt Package2.");
+        EPRINTF("Failed to derive Package2 key.");
         goto pkg2_done;
     } else if (pkg2_kb != pkg1_id->kb)
         EPRINTF("Warning: Package1-Package2 mismatch.");
+
     pkg2_hdr = pkg2_decrypt(pkg2);
+    if (!pkg2_hdr) {
+        EPRINTF("Failed to decrypt Package2.");
+        goto pkg2_done;
+    }
 
     TPRINTFARGS("%kDecrypt pkg2... ", colors[2]);
 
     LIST_INIT(kip1_info);
-    pkg2_parse_kips(&kip1_info, pkg2_hdr);
+    bool new_pkg2;
+    pkg2_parse_kips(&kip1_info, pkg2_hdr, &new_pkg2);
     LIST_FOREACH_ENTRY(pkg2_kip1_info_t, ki_tmp, &kip1_info, link) {
         if(ki_tmp->kip1->tid == 0x0100000000000000ULL) {
             ki = malloc(sizeof(pkg2_kip1_info_t));
@@ -405,6 +437,11 @@ get_tsec: ;
             hks_offset_from_end -= 0x6a73;
             alignment = 8;
             break;
+        case KB_FIRMWARE_VERSION_900:
+            start_offset = 0x2ec10;
+            hks_offset_from_end -= 0x5573;
+            alignment = 1; // RIP
+            break;
         }
 
         if (pkg1_id->kb <= KB_FIRMWARE_VERSION_500) {
@@ -455,6 +492,9 @@ pkg2_done:
         se_aes_crypt_block_ecb(8, 0, save_mac_key, fs_keys[6]);
     }
 
+    if (_key_exists(master_key[MAX_KEY])) {
+        MAX_KEY = KB_FIRMWARE_VERSION_MAX + 1;
+    }
     for (u32 i = 0; i < MAX_KEY; i++) {
         if (!_key_exists(master_key[i]))
             continue;
@@ -471,7 +511,10 @@ pkg2_done:
 
 
     if (!_key_exists(header_key) || !_key_exists(bis_key[2]))
+    {
+        EPRINTF("Missing FS keys. Skipping ES/SSL keys.");
         goto key_output;
+    }
 
     se_aes_key_set(4, header_key + 0x00, 0x10);
     se_aes_key_set(5, header_key + 0x10, 0x10);
@@ -494,7 +537,7 @@ pkg2_done:
     FIL fp;
     // sysmodule NCAs only ever have one section (exefs) so 0x600 is sufficient
     u8 *dec_header = (u8*)malloc(0x600);
-    char path[100] = "emmc:/Contents/registered";
+    char path[100] = "sd:/test/nca1111111111111";//"emmc:/Contents/registered";
     u32 titles_found = 0, title_limit = 2, read_bytes = 0;
     if (!memcmp(pkg1_id->id, "2016", 4))
         title_limit = 1;
@@ -553,6 +596,9 @@ pkg2_done:
             case KB_FIRMWARE_VERSION_810:
                 start_offset = 0x5563;
                 break;
+            case KB_FIRMWARE_VERSION_900:
+                start_offset = 0x6495;
+                break;
             }
             hash_order[2] = 2;
             if (pkg1_id->kb < KB_FIRMWARE_VERSION_500) {
@@ -604,6 +650,9 @@ pkg2_done:
             case KB_FIRMWARE_VERSION_810:
                 start_offset = 0x1d437;
                 break;
+            case KB_FIRMWARE_VERSION_900:
+                start_offset = 0x1d807;
+                break;
             }
             if (!memcmp(pkg1_id->id, "2016", 4))
                 start_offset = 0x449dc;
@@ -651,7 +700,7 @@ pkg2_done:
 
     // locate sd seed
     u8 read_buf[0x20] = {0};
-    for (u32 i = 0; i < f_size(&fp); i += 0x4000) {
+    for (u32 i = 0x8000; i < f_size(&fp); i += 0x4000) {
         if (f_lseek(&fp, i) || f_read(&fp, read_buf, 0x20, &read_bytes) || read_bytes != 0x20)
             break;
         if (!memcmp(temp_key, read_buf, 0x10)) {
@@ -716,6 +765,7 @@ key_output: ;
     SAVE_KEY("master_kek_source_06", master_kek_sources[0], 0x10);
     SAVE_KEY("master_kek_source_07", master_kek_sources[1], 0x10);
     SAVE_KEY("master_kek_source_08", master_kek_sources[2], 0x10);
+    SAVE_KEY("master_kek_source_09", master_kek_sources[3], 0x10);
     SAVE_KEY_FAMILY("master_key", master_key, MAX_KEY, 0x10);
     SAVE_KEY("master_key_source", master_key_source, 0x10);
     SAVE_KEY_FAMILY("package1_key", package1_key, 6, 0x10);

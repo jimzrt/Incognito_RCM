@@ -20,6 +20,7 @@
 #include "../gfx/di.h"
 #include "../libs/fatfs/ff.h"
 #include "../mem/heap.h"
+#include "../soc/hw_init.h"
 #include "../soc/pmc.h"
 #include "../soc/t210.h"
 #include "../storage/nx_emmc.h"
@@ -80,10 +81,17 @@ int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 	f_close(&fp);
 
 	// Copy sept-secondary.
-	if ((kb == 7) && f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ) && f_open(&fp, "sd:/sept/sept-secondary_00.enc", FA_READ))
-		goto error;
-	else if ((kb == 8) && f_open(&fp, "sd:/sept/sept-secondary_01.enc", FA_READ))
-		goto error;
+	if (kb < KB_FIRMWARE_VERSION_810)
+	{
+		if (f_open(&fp, "sd:/sept/sept-secondary_00.enc", FA_READ))
+			if (f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ)) // Try the deprecated version.
+				goto error;
+	}
+	else
+	{
+		if (f_open(&fp, "sd:/sept/sept-secondary_01.enc", FA_READ))
+			goto error;
+	}
 
 	if (f_read(&fp, (u8 *)SEPT_STG2_ADDR, f_size(&fp), NULL))
 	{
@@ -123,12 +131,12 @@ int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 	PMC(APBDEV_PMC_SCRATCH33) = SEPT_PRI_ADDR;
 	PMC(APBDEV_PMC_SCRATCH40) = 0x6000F208;
 
-	display_end();
+	reconfig_hw_workaround(false, 0);
 
 	(*sept)();
 
 error:
-	EPRINTF("Sept files not found in sd:/sept!\nPlace appropriate files and try again.");
+	EPRINTF("\nSept files not found in sd:/sept!\nPlace appropriate files and try again.");
 	display_backlight_brightness(100, 1000);
 
 	btn_wait();

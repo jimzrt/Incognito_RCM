@@ -61,6 +61,7 @@ emmc_part_t *system_part;
 static u8 temp_key[0x10],
           bis_key[4][0x20] = {0},
           device_key[0x10] = {0},
+          new_device_key[0x10] = {0},
           sd_seed[0x10] = {0},
           // FS-related keys
           fs_keys[10][0x20] = {0},
@@ -260,8 +261,10 @@ get_tsec: ;
         se_aes_crypt_block_ecb(9, 0, keyblob_key[i], keyblob_key[i]); // kbk = unwrap(temp, sbk)
         se_aes_key_set(7, keyblob_key[i], 0x10);
         se_aes_crypt_block_ecb(7, 0, keyblob_mac_key[i], keyblob_mac_key_source); // kbm = unwrap(kbms, kbk)
-        if (i == 0)
+        if (i == 0) {
             se_aes_crypt_block_ecb(7, 0, device_key, per_console_key_source); // devkey = unwrap(pcks, kbk0)
+            se_aes_crypt_block_ecb(7, 0, new_device_key, per_console_key_source_4x);
+        }
 
         // verify keyblob is not corrupt
         sdmmc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
@@ -290,14 +293,28 @@ get_tsec: ;
     /*  key = unwrap(source, wrapped_key):
         key_set(ks, wrapped_key), block_ecb(ks, 0, key, source) -> final key in key
     */
-   // TODO: fix bis key generation for newer unpatched consoles
+
+    u32 key_generation = 0;
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_500) {
+        if ((fuse_read_odm(4) & 0x800) && fuse_read_odm(0) == 0x8E61ECAE && fuse_read_odm(1) == 0xF2BA3BB2) {
+            key_generation = fuse_read_odm(2) & 0x1F;
+        }
+    }
     if (_key_exists(device_key)) {
-        se_aes_key_set(8, device_key, 0x10);
+        if (key_generation) {
+            se_aes_key_set(8, new_device_key, 0x10);
+            se_aes_crypt_block_ecb(8, 0, temp_key, new_device_key_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
+            se_aes_key_set(8, master_key[0], 0x10);
+            se_aes_unwrap_key(8, 8, new_device_keygen_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
+            se_aes_crypt_block_ecb(8, 0, temp_key, temp_key);
+        } else
+            memcpy(temp_key, device_key, 0x10);
+        se_aes_key_set(8, temp_key, 0x10);
         se_aes_unwrap_key(8, 8, retail_specific_aes_key_source); // kek = unwrap(rsaks, devkey)
         se_aes_crypt_block_ecb(8, 0, bis_key[0] + 0x00, bis_key_source[0] + 0x00); // bkey = unwrap(bkeys, kek)
         se_aes_crypt_block_ecb(8, 0, bis_key[0] + 0x10, bis_key_source[0] + 0x10);
         // kek = generate_kek(bkeks, devkey, aeskek, aeskey)
-        _generate_kek(8, bis_kek_source, device_key, aes_kek_generation_source, aes_key_generation_source);
+        _generate_kek(8, bis_kek_source, temp_key, aes_kek_generation_source, aes_key_generation_source);
         se_aes_crypt_block_ecb(8, 0, bis_key[1] + 0x00, bis_key_source[1] + 0x00); // bkey = unwrap(bkeys, kek)
         se_aes_crypt_block_ecb(8, 0, bis_key[1] + 0x10, bis_key_source[1] + 0x10);
         se_aes_crypt_block_ecb(8, 0, bis_key[2] + 0x00, bis_key_source[2] + 0x00);

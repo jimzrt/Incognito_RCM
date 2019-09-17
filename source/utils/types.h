@@ -68,6 +68,8 @@ typedef volatile unsigned char vu8;
 typedef volatile unsigned short vu16;
 typedef volatile unsigned int vu32;
 
+static const u32 colors[6] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE, COLOR_VIOLET};
+
 typedef int bool;
 #define true  1
 #define false 0
@@ -75,6 +77,8 @@ typedef int bool;
 #define BOOT_CFG_AUTOBOOT_EN (1 << 0)
 #define BOOT_CFG_FROM_LAUNCH (1 << 1)
 #define BOOT_CFG_SEPT_RUN    (1 << 7)
+
+#define EXTRA_CFG_DUMP_EMUMMC (1 << 0)
 
 typedef struct __attribute__((__packed__)) _boot_cfg_t
 {

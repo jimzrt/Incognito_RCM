@@ -21,13 +21,16 @@
 #include "config/config.h"
 #include "gfx/di.h"
 #include "gfx/gfx.h"
+#include "gfx/tui.h"
 #include "libs/fatfs/ff.h"
 #include "mem/heap.h"
 #include "power/max77620.h"
 #include "rtc/max77620-rtc.h"
 #include "soc/bpmp.h"
 #include "soc/hw_init.h"
+#include "storage/emummc.h"
 #include "storage/sdmmc.h"
+#include "utils/sprintf.h"
 #include "utils/util.h"
 
 #include "keys/keys.h"
@@ -79,27 +82,27 @@ void sd_unmount()
 
 void *sd_file_read(const char *path, u32 *fsize)
 {
-	FIL fp;
-	if (f_open(&fp, path, FA_READ) != FR_OK)
-		return NULL;
+    FIL fp;
+    if (f_open(&fp, path, FA_READ) != FR_OK)
+        return NULL;
 
-	u32 size = f_size(&fp);
-	if (fsize)
-		*fsize = size;
+    u32 size = f_size(&fp);
+    if (fsize)
+        *fsize = size;
 
-	void *buf = malloc(size);
+    void *buf = malloc(size);
 
-	if (f_read(&fp, buf, size, NULL) != FR_OK)
-	{
-		free(buf);
-		f_close(&fp);
+    if (f_read(&fp, buf, size, NULL) != FR_OK)
+    {
+        free(buf);
+        f_close(&fp);
 
-		return NULL;
-	}
+        return NULL;
+    }
 
-	f_close(&fp);
+    f_close(&fp);
 
-	return buf;
+    return buf;
 }
 
 int sd_save_to_file(void *buf, u32 size, const char *filename)
@@ -145,6 +148,34 @@ void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
     }
 }
 
+void dump_sysnand()
+{
+    h_cfg.emummc_force_disable = true;
+    b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
+    dump_keys();
+}
+
+void dump_emunand()
+{
+    if (h_cfg.emummc_force_disable)
+        return;
+    emu_cfg.enabled = 1;
+    b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
+    dump_keys();
+}
+
+ment_t ment_top[] = {
+	MDEF_HANDLER("Dump keys from SysNAND", dump_sysnand, COLOR_RED),
+    MDEF_HANDLER("Dump keys from emuMMC", dump_emunand, COLOR_ORANGE),
+	MDEF_CAPTION("---------------", COLOR_YELLOW),
+	MDEF_HANDLER("Reboot (Normal)", reboot_normal, COLOR_GREEN),
+	MDEF_HANDLER("Reboot (RCM)", reboot_rcm, COLOR_BLUE),
+	MDEF_HANDLER("Power off", power_off, COLOR_VIOLET),
+	MDEF_END()
+};
+
+menu_t menu_top = { ment_top, NULL, 0, 0 };
+
 #define IPL_STACK_TOP  0x4003F000
 #define IPL_HEAP_START 0x90020000
 
@@ -166,6 +197,25 @@ void ipl_main()
 
     bpmp_clk_rate_set(BPMP_CLK_SUPER_BOOST);
 
-    sd_mount();
-    dump_keys();
+    h_cfg.emummc_force_disable = emummc_load_cfg();
+
+    if (b_cfg.boot_cfg & BOOT_CFG_SEPT_RUN)
+    {
+        if (!(b_cfg.extra_cfg & EXTRA_CFG_DUMP_EMUMMC))
+            h_cfg.emummc_force_disable = true;
+        dump_keys();
+    }
+
+    if (h_cfg.emummc_force_disable)
+    {
+        ment_top[1].type = MENT_CAPTION;
+        ment_top[1].color = 0xFF555555;
+        ment_top[1].handler = NULL;
+    }
+
+    while (true)
+        tui_do_menu(&menu_top);
+
+    while (true)
+        bpmp_halt();
 }

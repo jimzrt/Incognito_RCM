@@ -19,6 +19,7 @@
 #include "../config/config.h"
 #include "../gfx/di.h"
 #include "../gfx/gfx.h"
+#include "../gfx/tui.h"
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"
@@ -32,6 +33,7 @@
 #include "../soc/fuse.h"
 #include "../soc/smmu.h"
 #include "../soc/t210.h"
+#include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
 #include "../storage/sdmmc.h"
 #include "../utils/btn.h"
@@ -91,8 +93,6 @@ static u8 temp_key[0x10],
           package2_key[KB_FIRMWARE_VERSION_MAX+1][0x10] = {0},
           titlekek[KB_FIRMWARE_VERSION_MAX+1][0x10] = {0};
 
-static const u32 colors[6] = {COLOR_RED, COLOR_ORANGE, COLOR_YELLOW, COLOR_GREEN, COLOR_BLUE, COLOR_VIOLET};
-
 // key functions
 static bool   _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
 static void   _save_key(const char *name, const void *data, const u32 len, char *outbuf);
@@ -105,26 +105,27 @@ static void   _update_ctr(u8 *ctr, u32 ofs);
 
 void dump_keys() {
     display_backlight_brightness(100, 1000);
-    gfx_clear_grey(0x1B);
+    gfx_clear_partial_grey(0x1B, 0, 1256);
     gfx_con_setpos(0, 0);
 
     gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
         colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
     start_time = get_tmr_us();
+    u32 begin_time = get_tmr_us();
     u32 retries = 0;
     u32 color_idx = 0;
 
     tsec_ctxt_t tsec_ctxt;
     sdmmc_t sdmmc;
 
-    sdmmc_storage_init_mmc(&storage, &sdmmc, SDMMC_4, SDMMC_BUS_WIDTH_8, 4);
+    emummc_storage_init_mmc(&storage, &sdmmc);
     TPRINTFARGS("%kMMC init...     ", colors[(color_idx++) % 6]);
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
-    sdmmc_storage_set_mmc_partition(&storage, 1);
-    sdmmc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
+    emummc_storage_set_mmc_partition(&storage, 1);
+    emummc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id) {
         EPRINTF("Unknown pkg1 version.");
@@ -154,6 +155,7 @@ void dump_keys() {
     }
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
+        sd_mount();
         if (!f_stat("sd:/sept/payload.bak", NULL)) {
             f_unlink("sd:/sept/payload.bin");
             f_rename("sd:/sept/payload.bak", "sd:/sept/payload.bin");
@@ -277,7 +279,7 @@ get_tsec: ;
         }
 
         // verify keyblob is not corrupt
-        sdmmc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
+        emummc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
         se_aes_key_set(3, keyblob_mac_key[i], 0x10);
         se_aes_cmac(3, keyblob_mac, 0x10, keyblob_block + 0x10, 0xa0);
         if (memcmp(keyblob_block, keyblob_mac, 0x10)) {
@@ -336,7 +338,7 @@ get_tsec: ;
     u8 *pkg2 = NULL;
     pkg2_kip1_info_t *ki = NULL;
 
-    sdmmc_storage_set_mmc_partition(&storage, 0);
+    emummc_storage_set_mmc_partition(&storage, 0);
     // Parse eMMC GPT.
     LIST_INIT(gpt);
     nx_emmc_gpt_parse(&gpt, &storage);
@@ -380,7 +382,7 @@ get_tsec: ;
         EPRINTF("Failed to derive Package2 key.");
         goto pkg2_done;
     } else if (pkg2_kb != pkg1_id->kb)
-        EPRINTF("Warning: Package1-Package2 mismatch.");
+        EPRINTFARGS("Warning! Package1-Package2 mismatch: %d, %d", pkg1_id->kb, pkg2_kb);
 
     pkg2_hdr = pkg2_decrypt(pkg2);
     if (!pkg2_hdr) {
@@ -749,7 +751,7 @@ pkg2_done:
 dismount:
     f_mount(NULL, "emmc:", 1);
     nx_emmc_gpt_free(&gpt);
-    sdmmc_storage_end(&storage);
+    emummc_storage_end(&storage);
 
     // derive eticket_rsa_kek and ssl_rsa_kek
     if (_key_exists(es_keys[0]) && _key_exists(es_keys[1]) && _key_exists(master_key[0])) {
@@ -828,31 +830,29 @@ key_output: ;
 
     //gfx_con.fntsz = 8; gfx_puts(text_buffer); gfx_con.fntsz = 16;
 
-    TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[(color_idx) % 6], _key_count, colors[(color_idx + 1) % 6]);
-    color_idx += 2;
+    end_time = get_tmr_us();
+    gfx_printf("\n%kFound %d keys.", colors[(color_idx++) % 6], _key_count);
+    _key_count = 0;
+    gfx_printf("\n%kLockpick totally done in %d us", colors[(color_idx++) % 6], end_time - begin_time);
+    gfx_printf("\n%kFound through master_key_%02x\n", colors[(color_idx++) % 6], MAX_KEY - 1);
 
-    f_mkdir("switch");
+    f_mkdir("sd:/switch");
     char keyfile_path[30] = "sd:/switch/";
     if (!(fuse_read_odm(4) & 3))
         sprintf(&keyfile_path[11], "prod.keys");
     else
         sprintf(&keyfile_path[11], "dev.keys");
-    if (!sd_save_to_file(text_buffer, strlen(text_buffer), keyfile_path) && !f_stat(keyfile_path, &fno)) {
+    if (sd_mount() && !sd_save_to_file(text_buffer, strlen(text_buffer), keyfile_path) && !f_stat(keyfile_path, &fno)) {
         gfx_printf("%kWrote %d bytes to %s\n", colors[(color_idx++) % 6], (u32)fno.fsize, keyfile_path);
     } else
         EPRINTF("Failed to save keys to SD.");
-    sd_unmount();
+    h_cfg.emummc_force_disable = emummc_load_cfg();
 
 out_wait:
-    gfx_printf("\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[(color_idx) % 6], colors[(color_idx + 1) % 6], colors[(color_idx + 2) % 6]);
+    sd_unmount();
+    gfx_printf("\n%kPress any key to return to the main menu.", colors[(color_idx) % 6], colors[(color_idx + 1) % 6], colors[(color_idx + 2) % 6]);
 
-    u32 btn = btn_wait();
-    if (btn & BTN_VOL_UP)
-        reboot_rcm();
-    else if (btn & BTN_VOL_DOWN)
-        reboot_normal();
-    else
-        power_off();
+    btn_wait();
 }
 
 static void _save_key(const char *name, const void *data, const u32 len, char *outbuf) {

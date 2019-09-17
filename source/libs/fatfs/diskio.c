@@ -42,10 +42,11 @@ typedef struct {
     u32 visit_count;
     u8  tweak[0x10];
     u8  cached_sector[0x200];
+    u8  align[8];
 } sector_cache_t;
- 
+
 #define MAX_SEC_CACHE_ENTRIES 64
-static sector_cache_t *sector_cache = (sector_cache_t*)0x40020000;
+static sector_cache_t *sector_cache = (sector_cache_t*)0x40022000;
 static u32 secindex = 0;
 
 DSTATUS disk_status (

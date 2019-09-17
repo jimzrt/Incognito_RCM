@@ -18,6 +18,7 @@
 
 #include <string.h>
 
+#include "config/config.h"
 #include "gfx/di.h"
 #include "gfx/gfx.h"
 #include "libs/fatfs/ff.h"
@@ -36,6 +37,7 @@ sdmmc_storage_t sd_storage;
 __attribute__ ((aligned (16))) FATFS sd_fs;
 static bool sd_mounted;
 
+hekate_config h_cfg;
 boot_cfg_t __attribute__((section ("._boot_cfg"))) b_cfg;
 
 bool sd_mount()
@@ -153,6 +155,8 @@ void ipl_main()
     config_hw();
     pivot_stack(IPL_STACK_TOP);
     heap_init(IPL_HEAP_START);
+
+    set_default_configuration();
 
     display_init();
     u32 *fb = display_init_framebuffer();

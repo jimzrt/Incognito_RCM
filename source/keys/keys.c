@@ -15,6 +15,8 @@
  */
 
 #include "keys.h"
+
+#include "../config/config.h"
 #include "../gfx/di.h"
 #include "../gfx/gfx.h"
 #include "../hos/pkg1.h"
@@ -45,16 +47,21 @@ extern bool sd_mount();
 extern void sd_unmount();
 extern int  sd_save_to_file(void *buf, u32 size, const char *filename);
 
+extern hekate_config h_cfg;
+
 u32 _key_count = 0;
 sdmmc_storage_t storage;
 emmc_part_t *system_part;
+u32 start_time, end_time;
 
 #define TPRINTF(text) \
-    end_time = get_tmr_ms(); \
-    gfx_printf(text" done @ %d.%03ds\n", (end_time - start_time) / 1000, (end_time - start_time) % 1000)
+    end_time = get_tmr_us(); \
+    gfx_printf(text" done in %d us\n", end_time - start_time); \
+    start_time = get_tmr_us()
 #define TPRINTFARGS(text, args...) \
-    end_time = get_tmr_ms(); \
-    gfx_printf(text" done @ %d.%03ds\n", args, (end_time - start_time) / 1000, (end_time - start_time) % 1000)
+    end_time = get_tmr_us(); \
+    gfx_printf(text" done in %d us\n", args, end_time - start_time); \
+    start_time = get_tmr_us()
 #define SAVE_KEY(name, src, len) _save_key(name, src, len, text_buffer)
 #define SAVE_KEY_FAMILY(name, src, count, len) _save_key_family(name, src, count, len, text_buffer)
 
@@ -104,14 +111,15 @@ void dump_keys() {
     gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
         colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
-    u32 start_time = get_tmr_ms(),
-        end_time,
-        retries = 0;
+    start_time = get_tmr_us();
+    u32 retries = 0;
+    u32 color_idx = 0;
 
     tsec_ctxt_t tsec_ctxt;
     sdmmc_t sdmmc;
 
     sdmmc_storage_init_mmc(&storage, &sdmmc, SDMMC_4, SDMMC_BUS_WIDTH_8, 4);
+    TPRINTFARGS("%kMMC init...     ", colors[(color_idx++) % 6]);
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
@@ -151,7 +159,7 @@ void dump_keys() {
             f_rename("sd:/sept/payload.bak", "sd:/sept/payload.bin");
         }
 
-        if (!(EMC(EMC_SCRATCH0) & EMC_SEPT_RUN)) {
+        if (!h_cfg.sept_run) {
             // bundle lp0 fw for sept instead of loading it from SD as hekate does
             sdram_lp0_save_params(sdram_get_params_patched());
             FIL fp;
@@ -167,8 +175,10 @@ void dump_keys() {
             u32 payload_size = *(u32 *)(IPL_LOAD_ADDR + 0x84) - IPL_LOAD_ADDR;
             f_write(&fp, (u8 *)IPL_LOAD_ADDR, payload_size, NULL);
             f_close(&fp);
-            gfx_printf("%kFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[0], colors[1]);
-            gfx_printf("\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin",colors[2], colors[3]);
+            gfx_printf("%k\nFirmware 7.x or higher detected.\n%kRenamed /sept/payload.bin", colors[(color_idx) % 6], colors[(color_idx + 1) % 6]);
+            color_idx += 2;
+            gfx_printf("\n%k     to /sept/payload.bak\n%kCopied self to /sept/payload.bin", colors[(color_idx) % 6], colors[(color_idx + 1) % 6]);
+            color_idx += 2;
             sdmmc_storage_end(&storage);
             if (!reboot_to_sept((u8 *)tsec_ctxt.fw, tsec_ctxt.size, pkg1_id->kb))
                 goto out_wait;
@@ -207,7 +217,7 @@ get_tsec: ;
         goto out_wait;
     }
 
-    TPRINTFARGS("%kTSEC key(s)...  ", colors[0]);
+    TPRINTFARGS("%kTSEC key(s)...  ", colors[(color_idx++) % 6]);
 
     // Master key derivation
     if (pkg1_id->kb == KB_FIRMWARE_VERSION_620 && _key_exists(tsec_keys + 0x10)) {
@@ -288,7 +298,7 @@ get_tsec: ;
     }
     free(keyblob_block);
 
-    TPRINTFARGS("%kMaster keys...  ", colors[1]);
+    TPRINTFARGS("%kMaster keys...  ", colors[(color_idx++) % 6]);
 
     /*  key = unwrap(source, wrapped_key):
         key_set(ks, wrapped_key), block_ecb(ks, 0, key, source) -> final key in key
@@ -378,7 +388,7 @@ get_tsec: ;
         goto pkg2_done;
     }
 
-    TPRINTFARGS("%kDecrypt pkg2... ", colors[2]);
+    TPRINTFARGS("%kDecrypt pkg2... ", colors[(color_idx++) % 6]);
 
     LIST_INIT(kip1_info);
     bool new_pkg2;
@@ -399,7 +409,7 @@ get_tsec: ;
     }
 
     pkg2_decompress_kip(ki, 2 | 4); // we only need .rodata and .data
-    TPRINTFARGS("%kDecompress FS...", colors[3]);
+    TPRINTFARGS("%kDecompress FS...", colors[(color_idx++) % 6]);
 
     u8  hash_index = 0, hash_max = 9, hash_order[10],
         key_lengths[10] = {0x10, 0x20, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x20, 0x20};
@@ -497,7 +507,7 @@ pkg2_done:
     free(pkg2);
     free(ki);
 
-    TPRINTFARGS("%kFS keys...      ", colors[4]);
+    TPRINTFARGS("%kFS keys...      ", colors[(color_idx++) % 6]);
 
     if (_key_exists(fs_keys[0]) && _key_exists(fs_keys[1]) && _key_exists(master_key[0])) {
         _generate_kek(8, fs_keys[0], master_key[0], aes_kek_generation_source, aes_key_generation_source);
@@ -699,6 +709,12 @@ pkg2_done:
     f_closedir(&dir);
     free(dec_header);
 
+    if (memcmp(pkg1_id->id, "2016", 4)) {
+        TPRINTFARGS("%kES & SSL keys...", colors[(color_idx++) % 6]);
+    } else {
+        TPRINTFARGS("%kSSL keys...     ", colors[(color_idx++) % 6]);
+    }
+
     if (f_open(&fp, "sd:/Nintendo/Contents/private", FA_READ | FA_OPEN_EXISTING)) {
         EPRINTF("Unable to locate SD seed. Skipping.");
         goto dismount;
@@ -728,16 +744,12 @@ pkg2_done:
     }
     f_close(&fp);
 
+    TPRINTFARGS("%kSD Seed...      ", colors[(color_idx++) % 6]);
+
 dismount:
     f_mount(NULL, "emmc:", 1);
     nx_emmc_gpt_free(&gpt);
     sdmmc_storage_end(&storage);
-
-    if (memcmp(pkg1_id->id, "2016", 4)) {
-        TPRINTFARGS("%kES & SSL keys...", colors[5]);
-    } else {
-        TPRINTFARGS("%kSSL keys...     ", colors[5]);
-    }
 
     // derive eticket_rsa_kek and ssl_rsa_kek
     if (_key_exists(es_keys[0]) && _key_exists(es_keys[1]) && _key_exists(master_key[0])) {
@@ -816,7 +828,8 @@ key_output: ;
 
     //gfx_con.fntsz = 8; gfx_puts(text_buffer); gfx_con.fntsz = 16;
 
-    TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[0], _key_count, colors[1]);
+    TPRINTFARGS("\n%kFound %d keys.\n%kLockpick totally", colors[(color_idx) % 6], _key_count, colors[(color_idx + 1) % 6]);
+    color_idx += 2;
 
     f_mkdir("switch");
     char keyfile_path[30] = "sd:/switch/";
@@ -825,13 +838,13 @@ key_output: ;
     else
         sprintf(&keyfile_path[11], "dev.keys");
     if (!sd_save_to_file(text_buffer, strlen(text_buffer), keyfile_path) && !f_stat(keyfile_path, &fno)) {
-        gfx_printf("%kWrote %d bytes to %s\n", colors[2], (u32)fno.fsize, keyfile_path);
+        gfx_printf("%kWrote %d bytes to %s\n", colors[(color_idx++) % 6], (u32)fno.fsize, keyfile_path);
     } else
         EPRINTF("Failed to save keys to SD.");
     sd_unmount();
 
 out_wait:
-    gfx_printf("\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[3], colors[4], colors[5]);
+    gfx_printf("\n%kVOL + -> Reboot to RCM\n%kVOL - -> Reboot normally\n%kPower -> Power off", colors[(color_idx) % 6], colors[(color_idx + 1) % 6], colors[(color_idx + 2) % 6]);
 
     u32 btn = btn_wait();
     if (btn & BTN_VOL_UP)

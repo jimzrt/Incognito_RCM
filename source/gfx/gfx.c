@@ -263,7 +263,6 @@ void gfx_putc(char c)
 		}
 		break;
 	}
-	
 }
 
 void gfx_puts(const char *s)

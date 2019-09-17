@@ -88,7 +88,7 @@ void panic(u32 val)
 	TMR(TIMER_TMR9_TMR_PTV) = TIMER_EN | TIMER_PER_EN;
 	TMR(TIMER_WDT4_CONFIG)  = TIMER_SRC(9) | TIMER_PER(1) | TIMER_PMCRESET_EN;
 	TMR(TIMER_WDT4_COMMAND) = TIMER_START_CNT;
-	
+
 	while (true)
 		usleep(1);
 }
@@ -126,7 +126,7 @@ void power_off()
 	max77620_rtc_stop_alarm();
 
 	i2c_send_byte(I2C_5, MAX77620_I2C_ADDR, MAX77620_REG_ONOFFCNFG1, MAX77620_ONOFFCNFG1_PWR_OFF);
-	
+
 	while (true)
 		bpmp_halt();
 }

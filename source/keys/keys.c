@@ -342,7 +342,7 @@ get_tsec: ;
     // Parse eMMC GPT.
     LIST_INIT(gpt);
     nx_emmc_gpt_parse(&gpt, &storage);
-    
+
     // Find package2 partition.
     emmc_part_t *pkg2_part = nx_emmc_part_find(&gpt, "BCPKG2-1-Normal-Main");
     if (!pkg2_part) {

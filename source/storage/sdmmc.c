@@ -1064,7 +1064,7 @@ void sdmmc_storage_init_wait_sd()
 int sdmmc_storage_init_sd(sdmmc_storage_t *storage, sdmmc_t *sdmmc, u32 id, u32 bus_width, u32 type)
 {
 	int is_version_1 = 0;
-	
+
 	// Some cards (Sandisk U1), do not like a fast power cycle. Wait min 100ms.
 	sdmmc_storage_init_wait_sd();
 
@@ -1144,7 +1144,7 @@ DPRINTF("[SD] cleared card detect\n");
 		free(buf);
 		return 0;
 	}
-		
+
 	//gfx_hexdump(0, storage->raw_scr, 8);
 DPRINTF("[SD] got scr\n");
 

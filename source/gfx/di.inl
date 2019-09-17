@@ -128,7 +128,7 @@ static const cfg_op_t _display_config_2[94] = {
 };
 
 //DSI Init config.
-static const cfg_op_t _display_config_3[61] = { 
+static const cfg_op_t _display_config_3[61] = {
 	{DSI_WR_DATA, 0},
 	{DSI_INT_ENABLE, 0},
 	{DSI_INT_STATUS, 0},

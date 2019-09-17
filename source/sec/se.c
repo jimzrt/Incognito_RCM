@@ -138,7 +138,7 @@ static int _se_execute_one_block(u32 op, void *dst, u32 dst_size, const void *sr
 	memcpy(block, src, src_size);
 	int res = _se_execute(op, block, 0x10, block, 0x10);
 	memcpy(dst, block, dst_size);
-	
+
 	free(block);
 	return res;
 }

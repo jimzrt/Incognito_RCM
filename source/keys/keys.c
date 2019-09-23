@@ -42,6 +42,7 @@
 #include "../utils/util.h"
 
 #include "key_sources.inl"
+#include "ccrypto.h"
 
 #include <string.h>
 
@@ -344,15 +345,28 @@ get_tsec: ;
     nx_emmc_gpt_parse(&gpt, &storage);
 
     // Find package2 partition.
-    emmc_part_t *pkg2_part = nx_emmc_part_find(&gpt, "BCPKG2-1-Normal-Main");
+    emmc_part_t *pkg2_part = nx_emmc_part_find(&gpt, "PRODINFO");
     if (!pkg2_part) {
-        EPRINTF("Failed to locate Package2.");
+        EPRINTF("Failed to locate PRODINFO.");
         goto pkg2_done;
     }
 
     // Read in package2 header and get package2 real size.
     u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    nx_emmc_part_read(&storage, pkg2_part, 0x4000 / NX_EMMC_BLOCKSIZE, 1, tmp);
+
+
+
+    nx_emmc_part_read(&storage, pkg2_part, 0, 1, tmp);
+
+    gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
+
+    aes_xtsn_decrypt(tmp, NX_EMMC_BLOCKSIZE, bis_key[0], bis_key[0] + 0x10,  pkg2_part->lba_end, pkg2_part->lba_start, NX_EMMC_BLOCKSIZE);
+
+    gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
+
+    free(tmp);
+    goto pkg2_done;
+
     u32 *hdr_pkg2_raw = (u32 *)(tmp + 0x100);
     u32 pkg2_size = hdr_pkg2_raw[0] ^ hdr_pkg2_raw[2] ^ hdr_pkg2_raw[3];
     free(tmp);

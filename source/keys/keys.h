@@ -17,6 +17,9 @@
 #ifndef _KEYS_H_
 #define _KEYS_H_
 
+#include "../utils/types.h"
+
 void dump_keys();
+bool readData(u64 offset, u64 length);
 
 #endif

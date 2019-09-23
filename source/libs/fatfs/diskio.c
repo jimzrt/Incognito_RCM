@@ -133,9 +133,7 @@ DRESULT disk_read_mod (
     DWORD sector,	/* Start sector in LBA */
     UINT count,		/* Number of sectors to read */
     sdmmc_storage_t *storage,
-    emmc_part_t *partition,
-    u32 hiKey
-)
+    emmc_part_t *partition)
 {
 
 
@@ -178,7 +176,7 @@ DRESULT disk_read_mod (
             }
 
             // fatfs will never pull more than a cluster
-            _emmc_xts(hiKey, hiKey - 1, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+            _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
             if (cache_sector) {
                 memcpy(sector_cache[s].cached_sector, buff, 0x200);
                 memcpy(sector_cache[s].tweak, tweak, 0x10);

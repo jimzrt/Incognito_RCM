@@ -43,6 +43,7 @@
 
 #include "key_sources.inl"
 #include "ccrypto.h"
+#include "XTS_AES.h"
 
 #include "../libs/fatfs/diskio.h"
 #include <string.h>
@@ -355,19 +356,22 @@ get_tsec: ;
     // Read in package2 header and get package2 real size.
     u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
+    u8 *tmp_copy = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+
 
 
     nx_emmc_part_read(&storage, pkg2_part, 0, 1, tmp);
 
+    memcpy(tmp_copy, tmp, NX_EMMC_BLOCKSIZE);
     gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
 
-    aes_xtsn_decrypt(tmp, NX_EMMC_BLOCKSIZE, bis_key[0], bis_key[0] + 0x10,  pkg2_part->lba_end, pkg2_part->lba_start, NX_EMMC_BLOCKSIZE);
-
-    gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
-
+    aes_xtsn_decrypt(tmp_copy, NX_EMMC_BLOCKSIZE, bis_key[0], bis_key[0] + 0x10,  pkg2_part->lba_end, pkg2_part->lba_start, NX_EMMC_BLOCKSIZE);
+    
+    gfx_hexdump(0, tmp_copy, NX_EMMC_BLOCKSIZE);
+    memcpy(tmp_copy, tmp, NX_EMMC_BLOCKSIZE);
 
     DRESULT read_res;
-    read_res = disk_read_mod (tmp, 0, 1, &storage, pkg2_part, 9);
+    read_res = disk_read_mod (tmp_copy, 0, 1, &storage, pkg2_part, 9);
 
     switch (read_res)
     {
@@ -392,10 +396,15 @@ get_tsec: ;
         break;
     }
 
-    gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
+    gfx_hexdump(0, tmp_copy, NX_EMMC_BLOCKSIZE);
+    memcpy(tmp_copy, tmp, NX_EMMC_BLOCKSIZE);
 
+
+    // XTS_AES128(tmp_copy, tmp, NX_EMMC_BLOCKSIZE, bis_key[0], DEC);
+    // gfx_hexdump(0, tmp_copy, NX_EMMC_BLOCKSIZE);
 
     free(tmp);
+    free(tmp_copy);
     goto pkg2_done;
 
     u32 *hdr_pkg2_raw = (u32 *)(tmp + 0x100);

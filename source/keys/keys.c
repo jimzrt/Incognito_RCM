@@ -44,6 +44,7 @@
 #include "key_sources.inl"
 #include "ccrypto.h"
 
+#include "../libs/fatfs/diskio.h"
 #include <string.h>
 
 extern bool sd_mount();
@@ -363,6 +364,36 @@ get_tsec: ;
     aes_xtsn_decrypt(tmp, NX_EMMC_BLOCKSIZE, bis_key[0], bis_key[0] + 0x10,  pkg2_part->lba_end, pkg2_part->lba_start, NX_EMMC_BLOCKSIZE);
 
     gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
+
+
+    DRESULT read_res;
+    read_res = disk_read_mod (tmp, 0, 1, &storage, pkg2_part, 9);
+
+    switch (read_res)
+    {
+    case RES_OK:
+        WPRINTF("Successful!");
+        break;		/* 0: Successful */
+	case RES_ERROR:
+        WPRINTF("R/W Error!");
+        break;		/* 1: R/W Error */
+	case RES_WRPRT:
+        WPRINTF("Write Protected!");
+        break;		/* 2: Write Protected */
+	case RES_NOTRDY:
+        WPRINTF("Not Ready!");
+        break;		/* 3: Not Ready */
+	case RES_PARERR:
+        WPRINTF("Invalid Parameter!");
+        break;		/* 4: Invalid Parameter */
+    
+    default:
+        WPRINTF("No Idea!");
+        break;
+    }
+
+    gfx_hexdump(0, tmp, NX_EMMC_BLOCKSIZE);
+
 
     free(tmp);
     goto pkg2_done;

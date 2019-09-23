@@ -27,8 +27,7 @@
 #include "diskio.h"		/* FatFs lower layer API */
 #include "../../mem/heap.h"
 #include "../../sec/se.h"
-#include "../../storage/nx_emmc.h"
-#include "../../storage/sdmmc.h"
+
 
 #define SDMMC_UPPER_BUFFER 0xB8000000
 #define DRAM_START         0x80000000
@@ -124,6 +123,73 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
 out:;
     return res;
 }
+
+
+
+
+DRESULT disk_read_mod (
+
+    BYTE *buff,		/* Data buffer to store read data */
+    DWORD sector,	/* Start sector in LBA */
+    UINT count,		/* Number of sectors to read */
+    sdmmc_storage_t *storage,
+    emmc_part_t *partition,
+    u32 hiKey
+)
+{
+
+
+        __attribute__ ((aligned (16))) static u8 tweak[0x10];
+        __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
+        __attribute__ ((aligned (16))) static u32 prev_sector = 0;
+        u32 tweak_exp = 0;
+        bool regen_tweak = true, cache_sector = false;
+
+        u32 s = 0;
+        if (count == 1) {
+            for ( ; s < secindex; s++) {
+                if (sector_cache[s].sector == sector) {
+                    sector_cache[s].visit_count++;
+                    memcpy(buff, sector_cache[s].cached_sector, 0x200);
+                    memcpy(tweak, sector_cache[s].tweak, 0x10);
+                    prev_sector = sector;
+                    prev_cluster = sector / 0x20;
+                    return RES_OK;
+                }
+            }
+            // add to cache
+            if (s == secindex && s < MAX_SEC_CACHE_ENTRIES) {
+                sector_cache[s].sector = sector;
+                sector_cache[s].visit_count++;
+                cache_sector = true;
+                secindex++;
+            }
+        }
+
+        if (nx_emmc_part_read(storage, partition, sector, count, buff)) {
+            if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
+                prev_cluster = sector / 0x20;
+                tweak_exp = sector % 0x20;
+            } else if (sector > prev_sector) { // sector in same cluster and past last sector
+                tweak_exp = sector - prev_sector - 1;
+                regen_tweak = false;
+            } else { // sector in same cluster and before or same as last sector
+                tweak_exp = sector % 0x20;
+            }
+
+            // fatfs will never pull more than a cluster
+            _emmc_xts(hiKey, hiKey - 1, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+            if (cache_sector) {
+                memcpy(sector_cache[s].cached_sector, buff, 0x200);
+                memcpy(sector_cache[s].tweak, tweak, 0x10);
+            }
+            prev_sector = sector + count - 1;
+            return RES_OK;
+        }
+    
+    return RES_ERROR;
+}
+
 
 DRESULT disk_read (
     BYTE pdrv,		/* Physical drive number to identify the drive */

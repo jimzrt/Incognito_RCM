@@ -20,6 +20,7 @@
 #include "../utils/types.h"
 
 void dump_keys();
-bool readData(u64 offset, u64 length);
+bool readData(u8 *buffer, u32 offset, u32 length);
+bool verify();
 
 #endif

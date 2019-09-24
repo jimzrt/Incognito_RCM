@@ -600,9 +600,9 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset) {
 //         ctr[0x10-i-1] = (u8)(ofs & 0xff);
 // }
 
-bool readData(u8* buffer, u32 offset, u32 length)
+bool readData(u8 *buffer, u32 offset, u32 length)
 {
-    
+
     u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
@@ -612,17 +612,15 @@ bool readData(u8* buffer, u32 offset, u32 length)
     //     EPRINTF("TOO BIG!!");
     // }
 
-
     //bool needMultipleSectors = newOffset + length > NX_EMMC_BLOCKSIZE;
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
     disk_read_mod(tmp, sector, sectorCount, &storage, prodinfo_part);
 
-
-  //  if (!needMultipleSectors)
-  //  {
-      //  gfx_hexdump(0, tmp + newOffset, length);
-        memcpy(buffer, tmp + newOffset, length);
+    //  if (!needMultipleSectors)
+    //  {
+    //  gfx_hexdump(0, tmp + newOffset, length);
+    memcpy(buffer, tmp + newOffset, length);
     // }
     // else
     // {
@@ -632,95 +630,89 @@ bool readData(u8* buffer, u32 offset, u32 length)
     //     memcpy(buffer + newLength, tmp, length - newLength);
     // }
 
-
     free(tmp);
 
     return true;
 }
 
+bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
+{
+    bool result = false;
+    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
-	bool verifyHash(u64 hashOffset, u64 offset, u64 sz)
-	{
-		bool result = false;
-		u8* buffer = (u8 *)malloc(sz);//new u8[sz];
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
 
-		if (!readData(buffer, offset, sz))
-		{
-            EPRINTF("error: failed reading calibration data\n");
-			//printf("error: failed reading calibration data\n");
-		}
-		else
-		{
-			u8 hash1[0x20];
-			u8 hash2[0x20];
+    while (sz > NX_EMMC_BLOCKSIZE)
+    {
 
-            SHA256_CTX ctx;
-            sha256_init(&ctx);
-            sha256_update(&ctx, buffer, sz);
-            sha256_final(&ctx, hash1);
+        readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+        sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
 
-            //se_calc_sha256(hash1, buffer, sz);
-			//sha256CalculateHash(hash1, buffer, sz);
+        sz -= NX_EMMC_BLOCKSIZE;
+        offset += NX_EMMC_BLOCKSIZE;
+    }
 
-			if (!readData(hash2, hashOffset, sizeof(hash2)))
-			{
-                EPRINTF("error: failed reading hash\n");
-				//printf("error: failed reading hash\n");
-			}
-			else
-			{
-				if (memcmp(hash1, hash2, sizeof(hash1)))
-				{
-                    EPRINTF("error: hash verification failed\n");
-					//printf("error: hash verification failed for %x %d\n", (long)offset, (long)sz);
+    readData(buffer, offset, sz);
 
-					//print(hash1, 0x20);
-					//print(hash2, 0x20);
-				}
-				else
-				{
-					result = true;
-				}
-			}
+    sha256_update(&ctx, buffer, sz);
+    u8 *hash1 = (u8 *)malloc(0x20);
+    sha256_final(&ctx, hash1);
 
-            gfx_hexdump(0, hash1, 0x08);
-            gfx_hexdump(0, hash2, 0x08);
+    u8 *hash2 = (u8 *)malloc(0x20);
+    //se_calc_sha256(hash1, buffer, sz);
+    //sha256CalculateHash(hash1, buffer, sz);
 
-		}
+    readData(hash2, hashOffset, 0x20);
 
-		free(buffer);
-		return result;
-	}
+    if (memcmp(hash1, hash2, 0x20))
+    {
+        EPRINTF("error: hash verification failed\n");
+        //printf("error: hash verification failed for %x %d\n", (long)offset, (long)sz);
 
+        //print(hash1, 0x20);
+        //print(hash2, 0x20);
+    }
+    else
+    {
+        result = true;
+    }
 
+    gfx_hexdump(0, hash1, 0x08);
+    gfx_hexdump(0, hash2, 0x08);
 
-    u32 certSize()
-	{
-        u32 buffer;
-        readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
-        EPRINTF("certSize");
-        gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
-		return buffer;
-	}
+    free(buffer);
+    free(hash1);
+    free(hash2);
+    return result;
+}
 
-    u32 calibrationDataSize()
-	{
-        u32 buffer;
-        readData((u8 *)&buffer, 0x08, sizeof(buffer));
-        EPRINTF("calSize");
-        gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
-		return buffer;
-	}
+u32 certSize()
+{
+    u32 buffer;
+    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
+    EPRINTF("certSize");
+    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    buffer = _read_le_u32(&buffer, 0);
+    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    return buffer;
+}
 
-    bool verify()
-	{
-		bool r = verifyHash(0x12E0, 0x0AE0, certSize()); // client cert hash
-		r &= verifyHash(0x20, 0x0040, calibrationDataSize()); // calibration hash
+u32 calibrationDataSize()
+{
+    u32 buffer;
+    readData((u8 *)&buffer, 0x08, sizeof(buffer));
+    EPRINTF("calSize");
+    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    buffer = _read_le_u32(&buffer, 0);
+    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    return buffer;
+}
 
-		return r;
-	}
+bool verify()
+{
+    bool r = verifyHash(0x12E0, 0x0AE0, certSize());      // client cert hash
+    r &= verifyHash(0x20, 0x0040, calibrationDataSize()); // calibration hash
 
-    // u32 calibrationDataSize()
-	// {
-	// 	return read<u32>(0x08);
-	// }
+    return r;
+}

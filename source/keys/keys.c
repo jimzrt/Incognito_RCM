@@ -23,7 +23,7 @@
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"
-//#include "../libs/fatfs/ff.h"
+#include "../libs/fatfs/ff.h"
 #include "../mem/heap.h"
 #include "../mem/mc.h"
 #include "../mem/sdram.h"
@@ -157,6 +157,7 @@ void dump_keys() {
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620) {
         MAX_KEY = pkg1_id->kb + 1;
     }
+
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700) {
         // sd_mount();
@@ -374,15 +375,26 @@ void dump_keys() {
     se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
-    u32 length = 0x18;
-    u8* buffer = (u8 *)malloc(length);
-    readData(buffer, 0x250, length);
+    //u32 length = 0x18;
+    u8 buffer[0x18];// = (u8 *)malloc(length);
+    readData(buffer, 0x250, sizeof(buffer));
     
-    gfx_hexdump(0, buffer, length);
-    free(buffer);
+
+    // const char junkSerial[] = "XAJ40030770863";
+    // gfx_hexdump(0, (u8 *)junkSerial, strlen(junkSerial));
+   // writeData((u8 *)junkSerial, 0x250, strlen(junkSerial));
+
+    gfx_hexdump(0, buffer, sizeof(buffer));
+    //free(buffer);
+
+    verify();
+
+    writeClientCertHash();
+    writeCal0Hash();
 
     verify();
    // free(tmp_copy);
+
 
 
 
@@ -605,7 +617,7 @@ bool readData(u8 *buffer, u32 offset, u32 length)
     u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
-    u8 sectorCount = ((newOffset + length) / NX_EMMC_BLOCKSIZE) + 1;
+    u8 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
 
     // if(length + newOffset > NX_EMMC_BLOCKSIZE * 2){
     //     EPRINTF("TOO BIG!!");
@@ -614,7 +626,7 @@ bool readData(u8 *buffer, u32 offset, u32 length)
     //bool needMultipleSectors = newOffset + length > NX_EMMC_BLOCKSIZE;
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
-    disk_read_mod(tmp, sector, sectorCount, &storage, prodinfo_part);
+    disk_read_prod(tmp, sector, sectorCount);
 
     //  if (!needMultipleSectors)
     //  {
@@ -634,9 +646,46 @@ bool readData(u8 *buffer, u32 offset, u32 length)
     return true;
 }
 
-bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
+bool writeData(u8 *buffer, u32 offset, u32 length)
 {
-    bool result = false;
+
+    u32 sector = (offset / NX_EMMC_BLOCKSIZE);
+    u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
+
+    u8 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
+
+    // if(length + newOffset > NX_EMMC_BLOCKSIZE * 2){
+    //     EPRINTF("TOO BIG!!");
+    // }
+
+    //bool needMultipleSectors = newOffset + length > NX_EMMC_BLOCKSIZE;
+
+    u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
+    disk_read_prod(tmp, sector, sectorCount);
+
+    //  if (!needMultipleSectors)
+    //  {
+    //  gfx_hexdump(0, tmp + newOffset, length);
+    memcpy(tmp + newOffset, buffer, length);
+
+    disk_write_prod(tmp, sector, sectorCount);
+    // }
+    // else
+    // {
+    //     u32 newLength = (newOffset + length) - NX_EMMC_BLOCKSIZE;
+    //     memcpy(buffer, tmp + newOffset, newLength);
+    //     disk_read_mod(tmp, sector + 1, 1, &storage, prodinfo_part);
+    //     memcpy(buffer + newLength, tmp, length - newLength);
+    // }
+
+    free(tmp);
+
+    return true;
+}
+
+
+bool writeHash(u32 hashOffset, u32 offset, u32 sz)
+	{
     u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
     SHA256_CTX ctx;
@@ -646,19 +695,60 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     {
 
         readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+       // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
         sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
 
         sz -= NX_EMMC_BLOCKSIZE;
         offset += NX_EMMC_BLOCKSIZE;
     }
 
-    readData(buffer, offset, sz);
+    if(sz > 0){
 
+    
+    readData(buffer, offset, sz);
     sha256_update(&ctx, buffer, sz);
-    u8 *hash1 = (u8 *)malloc(0x20);
+}
+    u8 hash[0x20];
+    sha256_final(&ctx, hash);
+
+    writeData(hash, hashOffset, 0x20);
+
+			
+		
+
+		free(buffer);
+		return true;
+	}
+
+bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
+{
+    bool result = false;
+    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+
+    SHA256_CTX ctx;
+    sha256_init(&ctx);
+
+    while (sz > 64)
+    {
+
+        readData(buffer, offset, 64);
+       // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
+        sha256_update(&ctx, buffer, 64);
+
+        sz -= 64;
+        offset += 64;
+    }
+
+    if(sz > 0){
+
+    
+    readData(buffer, offset, sz);
+    sha256_update(&ctx, buffer, sz);
+}
+    u8 hash1[0x20];
     sha256_final(&ctx, hash1);
 
-    u8 *hash2 = (u8 *)malloc(0x20);
+    u8 hash2[0x20];
     //se_calc_sha256(hash1, buffer, sz);
     //sha256CalculateHash(hash1, buffer, sz);
 
@@ -667,22 +757,16 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     if (memcmp(hash1, hash2, 0x20))
     {
         EPRINTF("error: hash verification failed\n");
-        //printf("error: hash verification failed for %x %d\n", (long)offset, (long)sz);
-
-        //print(hash1, 0x20);
-        //print(hash2, 0x20);
     }
     else
     {
         result = true;
     }
 
-    gfx_hexdump(0, hash1, 0x08);
-    gfx_hexdump(0, hash2, 0x08);
+    gfx_hexdump(0, hash1, 0x20);
+    gfx_hexdump(0, hash2, 0x20);
 
     free(buffer);
-    free(hash1);
-    free(hash2);
     return result;
 }
 
@@ -690,10 +774,8 @@ u32 certSize()
 {
     u32 buffer;
     readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
-    EPRINTF("certSize");
-    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
-    buffer = _read_le_u32(&buffer, 0);
-    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    // EPRINTF("certSize");
+    // gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
     return buffer;
 }
 
@@ -701,17 +783,102 @@ u32 calibrationDataSize()
 {
     u32 buffer;
     readData((u8 *)&buffer, 0x08, sizeof(buffer));
-    EPRINTF("calSize");
-    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
-    buffer = _read_le_u32(&buffer, 0);
-    gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+    // EPRINTF("calSize");
+    // gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
     return buffer;
+}
+
+
+
+bool writeCal0Hash()
+{
+	return writeHash(0x20, 0x40, calibrationDataSize());
+}
+
+bool writeClientCertHash()
+{
+	return writeHash(0x12E0, 0xAE0, certSize());
+}
+
+bool verifyCal0Hash(){
+    return verifyHash(0x20, 0x40, calibrationDataSize());
+}
+
+bool verifyClientCertHash()
+{
+    
+
+    return verifyHash(0x12E0, 0xAE0, certSize());
 }
 
 bool verify()
 {
-    bool r = verifyHash(0x12E0, 0x0AE0, certSize());      // client cert hash
-    r &= verifyHash(0x20, 0x0040, calibrationDataSize()); // calibration hash
+    return verifyClientCertHash() & verifyCal0Hash();
+    // bool r = verifyHash(0x12E0, 0xAE0, certSize());      // client cert hash
+    // r &= verifyHash(0x20, 0x40, calibrationDataSize()); // calibration hash
 
-    return r;
+    // return r;
 }
+
+
+void backup(){
+        sd_mount();
+    if (f_stat("sd:/prodinfo.bin", NULL)){
+    f_unlink("sd:/prodinfo.bin");
+    }
+     FIL fp;
+     f_open(&fp, "sd:/prodinfo.bin", FA_CREATE_NEW | FA_WRITE);
+     u8 bufferNX[NX_EMMC_BLOCKSIZE];
+     u32 size = 0x3FBC00;
+     u32 offset = 0;
+     while(size > NX_EMMC_BLOCKSIZE){
+         readData(bufferNX, offset, NX_EMMC_BLOCKSIZE);
+         f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
+         offset += NX_EMMC_BLOCKSIZE;
+         size -= NX_EMMC_BLOCKSIZE;
+     }
+     if(size > 0){
+         readData(bufferNX, offset, size);
+         f_write(&fp, bufferNX, size, NULL);
+     }
+     
+     f_close(&fp);
+
+    gfx_printf("\n%kBackup unecrypted done!", 4);
+
+
+    if (f_stat("sd:/prodinfoENC.bin", NULL)){
+    f_unlink("sd:/prodinfoENC.bin");
+    }
+
+     f_open(&fp, "sd:/prodinfoENC.bin", FA_CREATE_NEW | FA_WRITE);
+     size = 0x3FBC00;
+     offset = 0;
+     while(size > NX_EMMC_BLOCKSIZE){
+         nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
+         f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
+         offset ++;
+         size -= NX_EMMC_BLOCKSIZE;
+     }
+     if(size > 0){
+         nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
+         f_write(&fp, bufferNX, size, NULL);
+     }
+     
+     f_close(&fp);
+
+    gfx_printf("\n%kBackup encrypted done!", 4);
+
+}
+
+// bool erase(u32 offset, u32 sz)
+// 	{
+// 		u8 zero = 0;
+
+// 		for (u64 i = 0; i < sz; i++)
+// 		{
+// 			fsStorageWrite(&m_sh, offset + i, &zero, 1);
+// 		}
+
+// 		return true;
+// 	}

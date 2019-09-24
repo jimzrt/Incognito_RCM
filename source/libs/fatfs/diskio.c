@@ -35,6 +35,7 @@
 extern sdmmc_storage_t sd_storage;
 extern sdmmc_storage_t storage;
 extern emmc_part_t *system_part;
+extern emmc_part_t *prodinfo_part;
 
 typedef struct {
     u32 sector;
@@ -127,13 +128,12 @@ out:;
 
 
 
-DRESULT disk_read_mod (
+DRESULT disk_read_prod (
 
     BYTE *buff,		/* Data buffer to store read data */
     DWORD sector,	/* Start sector in LBA */
-    UINT count,		/* Number of sectors to read */
-    sdmmc_storage_t *storage,
-    emmc_part_t *partition)
+    UINT count		/* Number of sectors to read */
+    )
 {
 
 
@@ -141,30 +141,11 @@ DRESULT disk_read_mod (
         __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
         __attribute__ ((aligned (16))) static u32 prev_sector = 0;
         u32 tweak_exp = 0;
-        bool regen_tweak = true, cache_sector = false;
+        bool regen_tweak = true;
 
-        u32 s = 0;
-        if (count == 1) {
-            for ( ; s < secindex; s++) {
-                if (sector_cache[s].sector == sector) {
-                    sector_cache[s].visit_count++;
-                    memcpy(buff, sector_cache[s].cached_sector, 0x200);
-                    memcpy(tweak, sector_cache[s].tweak, 0x10);
-                    prev_sector = sector;
-                    prev_cluster = sector / 0x20;
-                    return RES_OK;
-                }
-            }
-            // add to cache
-            if (s == secindex && s < MAX_SEC_CACHE_ENTRIES) {
-                sector_cache[s].sector = sector;
-                sector_cache[s].visit_count++;
-                cache_sector = true;
-                secindex++;
-            }
-        }
+       
 
-        if (nx_emmc_part_read(storage, partition, sector, count, buff)) {
+        if (nx_emmc_part_read(&storage, prodinfo_part, sector, count, buff)) {
             if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
                 prev_cluster = sector / 0x20;
                 tweak_exp = sector % 0x20;
@@ -177,15 +158,50 @@ DRESULT disk_read_mod (
 
             // fatfs will never pull more than a cluster
             _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-            if (cache_sector) {
-                memcpy(sector_cache[s].cached_sector, buff, 0x200);
-                memcpy(sector_cache[s].tweak, tweak, 0x10);
-            }
+
             prev_sector = sector + count - 1;
             return RES_OK;
         }
     
     return RES_ERROR;
+}
+
+DRESULT disk_write_prod (
+
+    BYTE *buff,		/* Data buffer to store read data */
+    DWORD sector,	/* Start sector in LBA */
+    UINT count		/* Number of sectors to read */
+    )
+{
+
+
+        __attribute__ ((aligned (16))) static u8 tweak[0x10];
+        __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
+        __attribute__ ((aligned (16))) static u32 prev_sector = 0;
+        u32 tweak_exp = 0;
+        bool regen_tweak = true;
+
+
+
+
+            if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
+                prev_cluster = sector / 0x20;
+                tweak_exp = sector % 0x20;
+            } else if (sector > prev_sector) { // sector in same cluster and past last sector
+                tweak_exp = sector - prev_sector - 1;
+                regen_tweak = false;
+            } else { // sector in same cluster and before or same as last sector
+                tweak_exp = sector % 0x20;
+            }
+
+            // fatfs will never pull more than a cluster
+            _emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+            nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff);
+            prev_sector = sector + count - 1;
+            return RES_OK;
+        
+    
+  //  return RES_ERROR;
 }
 
 

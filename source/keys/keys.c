@@ -42,8 +42,7 @@
 #include "../utils/util.h"
 
 #include "key_sources.inl"
-#include "ccrypto.h"
-#include "XTS_AES.h"
+
 
 #include "../libs/fatfs/diskio.h"
 #include <string.h>

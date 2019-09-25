@@ -27,6 +27,7 @@
 #include "diskio.h"		/* FatFs lower layer API */
 #include "../../mem/heap.h"
 #include "../../sec/se.h"
+#include "../../keys/aes_xts.h"
 
 
 #define SDMMC_UPPER_BUFFER 0xB8000000
@@ -106,7 +107,7 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
         pdst += 0x10;
     }
 
-    se_aes_crypt_ecb(ks2, 0, dst, secsize, src, secsize);
+    se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
 
     pdst = (u8 *)dst;
 

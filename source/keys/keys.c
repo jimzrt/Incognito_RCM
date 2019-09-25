@@ -48,6 +48,8 @@
 #include <string.h>
 #include "sha256.h"
 
+#include "aes_xts.h"
+
 extern bool sd_mount();
 extern void sd_unmount();
 extern int  sd_save_to_file(void *buf, u32 size, const char *filename);
@@ -389,7 +391,22 @@ void dump_keys() {
 
    // restore();
 
-    verify();
+   // verify();
+
+    u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    u8 *tmp_dec = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    nx_emmc_part_read(&storage, prodinfo_part, 0, 1, tmp);
+
+    aes_xts_ctxt_t context;
+    aes_xts_init(&context, AES_DECRYPT, bis_key[0], bis_key[0] + 0x10, 128);
+    aes_xts_crypt(&context, 0, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
+
+    gfx_hexdump(0, tmp_dec, 0x10);
+
+    aes_xts_crypt(&context, prodinfo_part->lba_start, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
+
+    gfx_hexdump(0, tmp_dec, 0x10);
+
 
     // writeClientCertHash();
    //  writeCal0Hash();

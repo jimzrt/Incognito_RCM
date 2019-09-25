@@ -25,5 +25,6 @@ bool writeData(u8 *buffer, u32 offset, u32 length);
 bool writeClientCertHash();
 bool writeCal0Hash();
 bool verify();
+bool restore();
 
 #endif

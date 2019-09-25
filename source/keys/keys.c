@@ -234,38 +234,38 @@ void dump_keys() {
         se_aes_crypt_block_ecb(8, 0, master_key[6], master_key_source);
     }
 
-    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620) {
-        // derive all lower master keys in case keyblobs are bad
-        if (_key_exists(master_key[pkg1_id->kb])) {
-            for (u32 i = pkg1_id->kb; i > 0; i--) {
-                se_aes_key_set(8, master_key[i], 0x10);
-                se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
-            }
-            se_aes_key_set(8, master_key[0], 0x10);
-            se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
-            if (_key_exists(temp_key)) {
-                EPRINTFARGS("Failed to derive master key. kb = %d", pkg1_id->kb);
-            }
-        } else if (_key_exists(master_key[KB_FIRMWARE_VERSION_MAX])) {
-            // handle sept version differences
-            for (u32 kb = KB_FIRMWARE_VERSION_MAX; kb >= KB_FIRMWARE_VERSION_620; kb--) {
-                for (u32 i = kb; i > 0; i--) {
-                    se_aes_key_set(8, master_key[i], 0x10);
-                    se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
-                }
-                se_aes_key_set(8, master_key[0], 0x10);
-                se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
-                if (!_key_exists(temp_key)) {
-                    break;
-                }
-                memcpy(master_key[kb-1], master_key[kb], 0x10);
-                memcpy(master_key[kb], zeros, 0x10);
-            }
-            if (_key_exists(temp_key)) {
-                EPRINTF("Failed to derive master key.");
-            }
-        }
-    }
+    // if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620) {
+    //     // derive all lower master keys in case keyblobs are bad
+    //     if (_key_exists(master_key[pkg1_id->kb])) {
+    //         for (u32 i = pkg1_id->kb; i > 0; i--) {
+    //             se_aes_key_set(8, master_key[i], 0x10);
+    //             se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
+    //         }
+    //         se_aes_key_set(8, master_key[0], 0x10);
+    //         se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
+    //         if (_key_exists(temp_key)) {
+    //             EPRINTFARGS("Failed to derive master key. kb = %d", pkg1_id->kb);
+    //         }
+    //     } else if (_key_exists(master_key[KB_FIRMWARE_VERSION_MAX])) {
+    //         // handle sept version differences
+    //         for (u32 kb = KB_FIRMWARE_VERSION_MAX; kb >= KB_FIRMWARE_VERSION_620; kb--) {
+    //             for (u32 i = kb; i > 0; i--) {
+    //                 se_aes_key_set(8, master_key[i], 0x10);
+    //                 se_aes_crypt_block_ecb(8, 0, master_key[i-1], mkey_vectors[i]);
+    //             }
+    //             se_aes_key_set(8, master_key[0], 0x10);
+    //             se_aes_crypt_block_ecb(8, 0, temp_key, mkey_vectors[0]);
+    //             if (!_key_exists(temp_key)) {
+    //                 break;
+    //             }
+    //             memcpy(master_key[kb-1], master_key[kb], 0x10);
+    //             memcpy(master_key[kb], zeros, 0x10);
+    //         }
+    //         if (_key_exists(temp_key)) {
+    //             EPRINTF("Failed to derive master key.");
+    //         }
+    //     }
+    // }
 
     u8 *keyblob_block = (u8 *)calloc(NX_EMMC_BLOCKSIZE, 1);
     u8 keyblob_mac[0x10] = {0};
@@ -387,12 +387,16 @@ void dump_keys() {
     gfx_hexdump(0, buffer, sizeof(buffer));
     //free(buffer);
 
-    verify();
-
-    writeClientCertHash();
-    writeCal0Hash();
+   // restore();
 
     verify();
+
+    // writeClientCertHash();
+   //  writeCal0Hash();
+
+  //   verify();
+
+    // verify();
    // free(tmp_copy);
 
 
@@ -686,30 +690,44 @@ bool writeData(u8 *buffer, u32 offset, u32 length)
 
 bool writeHash(u32 hashOffset, u32 offset, u32 sz)
 	{
-    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
+                u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
-    while (sz > NX_EMMC_BLOCKSIZE)
-    {
+     SHA256_CTX ctx;
+        sha256_init(&ctx);
 
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE);
-       // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
-        sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
+        u32 newOffset = offset % NX_EMMC_BLOCKSIZE;
 
-        sz -= NX_EMMC_BLOCKSIZE;
-        offset += NX_EMMC_BLOCKSIZE;
-    }
+        if (newOffset > 0 && newOffset + sz >= NX_EMMC_BLOCKSIZE)
+        {
+            u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
+            readData(buffer, offset, toRead);
+            // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
+            sha256_update(&ctx, buffer, toRead);
 
-    if(sz > 0){
+            sz -= toRead;
+            offset += toRead;
+        }
 
-    
-    readData(buffer, offset, sz);
-    sha256_update(&ctx, buffer, sz);
-}
-    u8 hash[0x20];
-    sha256_final(&ctx, hash);
+        while (sz > NX_EMMC_BLOCKSIZE)
+        {
+
+            readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+            // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
+            sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
+
+            sz -= NX_EMMC_BLOCKSIZE;
+            offset += NX_EMMC_BLOCKSIZE;
+        }
+
+        if (sz > 0)
+        {
+
+            readData(buffer, offset, sz);
+            sha256_update(&ctx, buffer, sz);
+        }
+        u8 hash[0x20];
+        sha256_final(&ctx, hash);
 
     writeData(hash, hashOffset, 0x20);
 
@@ -720,63 +738,76 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
 		return true;
 	}
 
-bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
-{
-    bool result = false;
-    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
-
-    while (sz > 64)
+    bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     {
+        bool result = false;
+        u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
 
-        readData(buffer, offset, 64);
-       // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
-        sha256_update(&ctx, buffer, 64);
+        SHA256_CTX ctx;
+        sha256_init(&ctx);
 
-        sz -= 64;
-        offset += 64;
+        u32 newOffset = offset % NX_EMMC_BLOCKSIZE;
+
+        if (newOffset > 0 && newOffset + sz >= NX_EMMC_BLOCKSIZE)
+        {
+            u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
+            readData(buffer, offset, toRead);
+            // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
+            sha256_update(&ctx, buffer, toRead);
+
+            sz -= toRead;
+            offset += toRead;
+        }
+
+        while (sz > NX_EMMC_BLOCKSIZE)
+        {
+
+            readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+            // gfx_hexdump(0, buffer + NX_EMMC_BLOCKSIZE - 8, 8);
+            sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
+
+            sz -= NX_EMMC_BLOCKSIZE;
+            offset += NX_EMMC_BLOCKSIZE;
+        }
+
+        if (sz > 0)
+        {
+
+            readData(buffer, offset, sz);
+            sha256_update(&ctx, buffer, sz);
+        }
+        u8 hash1[0x20];
+        sha256_final(&ctx, hash1);
+
+        u8 hash2[0x20];
+        //se_calc_sha256(hash1, buffer, sz);
+        //sha256CalculateHash(hash1, buffer, sz);
+
+        readData(hash2, hashOffset, 0x20);
+
+        if (memcmp(hash1, hash2, 0x20))
+        {
+            EPRINTF("error: hash verification failed\n");
+        }
+        else
+        {
+            result = true;
+        }
+
+        gfx_hexdump(0, hash1, 0x20);
+        gfx_hexdump(0, hash2, 0x20);
+
+        free(buffer);
+        return result;
     }
 
-    if(sz > 0){
-
-    
-    readData(buffer, offset, sz);
-    sha256_update(&ctx, buffer, sz);
-}
-    u8 hash1[0x20];
-    sha256_final(&ctx, hash1);
-
-    u8 hash2[0x20];
-    //se_calc_sha256(hash1, buffer, sz);
-    //sha256CalculateHash(hash1, buffer, sz);
-
-    readData(hash2, hashOffset, 0x20);
-
-    if (memcmp(hash1, hash2, 0x20))
+    u32 certSize()
     {
-        EPRINTF("error: hash verification failed\n");
-    }
-    else
-    {
-        result = true;
-    }
-
-    gfx_hexdump(0, hash1, 0x20);
-    gfx_hexdump(0, hash2, 0x20);
-
-    free(buffer);
-    return result;
-}
-
-u32 certSize()
-{
-    u32 buffer;
-    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
-    // EPRINTF("certSize");
-    // gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
-    return buffer;
+        u32 buffer;
+        readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
+        // EPRINTF("certSize");
+        // gfx_hexdump(0, (u8 *)&buffer, sizeof(buffer));
+        return buffer;
 }
 
 u32 calibrationDataSize()
@@ -854,21 +885,49 @@ void backup(){
      f_open(&fp, "sd:/prodinfoENC.bin", FA_CREATE_NEW | FA_WRITE);
      size = 0x3FBC00;
      offset = 0;
-     while(size > NX_EMMC_BLOCKSIZE){
+     while(size > 0){
          nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
          f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
          offset ++;
          size -= NX_EMMC_BLOCKSIZE;
      }
-     if(size > 0){
-         nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
-         f_write(&fp, bufferNX, size, NULL);
-     }
+    //  if(size > 0){
+    //      nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
+    //      f_write(&fp, bufferNX, size, NULL);
+    //  }
      
      f_close(&fp);
 
-    gfx_printf("\n%kBackup encrypted done!", 4);
+    gfx_printf("\n%kBackup encrypted done!", colors[4]);
 
+}
+
+bool restore(){
+     FIL fp;
+     if(f_open(&fp, "sd:/prodinfoENC.bin", FA_READ) != FR_OK){
+          gfx_printf("\n%Cannot open prodinfEnc.bin!", 4);
+          return false;
+     }
+    u8 bufferNX[NX_EMMC_BLOCKSIZE];
+
+     u32 size = 0x3FBC00;
+     u32 offset = 0;
+     while(size > 0){
+         f_read(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
+         nx_emmc_part_write(&storage, prodinfo_part, offset, 1, bufferNX);
+         offset ++;
+         size -= NX_EMMC_BLOCKSIZE;
+     }
+    //  if(size > 0){
+    //      f_read(&fp, bufferNX, size, NULL);
+    //      nx_emmc_part_write(&storage, prodinfo_part, offset, 1, bufferNX);
+    //      f_write(&fp, bufferNX, size, NULL);
+    //  }
+     
+     f_close(&fp);
+
+    gfx_printf("\n%Restore encrypted done!", 4);
+    return true;
 }
 
 // bool erase(u32 offset, u32 sz)

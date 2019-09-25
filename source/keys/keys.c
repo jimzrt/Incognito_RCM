@@ -407,12 +407,13 @@ void dump_keys() {
 
     gfx_hexdump(0, tmp_dec, 0x10);
 
-
     se_aes_xts_crypt_sec(9, 8, 0, 0, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
 
     gfx_hexdump(0, tmp_dec, 0x10);
 
     se_aes_xts_crypt_sec(9, 8, 0, prodinfo_part->lba_start, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
+
+    gfx_hexdump(0, tmp_dec, 0x10);
 
 
 

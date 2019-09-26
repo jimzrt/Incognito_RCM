@@ -378,43 +378,67 @@ void dump_keys() {
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
     //u32 length = 0x18;
-    u8 buffer[0x18];// = (u8 *)malloc(length);
-    readData(buffer, 0x250, sizeof(buffer));
-    
+    // u8* buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    // readData(buffer, 0, NX_EMMC_BLOCKSIZE);
+    // gfx_hexdump(0, buffer, 0x08);
+
+    // readData(buffer, NX_EMMC_BLOCKSIZE, NX_EMMC_BLOCKSIZE);
+    // gfx_hexdump(0, buffer, 100);
+
+
+    // free(buffer);
 
     // const char junkSerial[] = "XAJ40030770863";
     // gfx_hexdump(0, (u8 *)junkSerial, strlen(junkSerial));
    // writeData((u8 *)junkSerial, 0x250, strlen(junkSerial));
 
-    gfx_hexdump(0, buffer, sizeof(buffer));
+  //  gfx_hexdump(0, buffer, sizeof(buffer));
     //free(buffer);
 
    // restore();
 
    // verify();
 
-    u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    u8 *tmp_dec = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    nx_emmc_part_read(&storage, prodinfo_part, 0, 1, tmp);
+     u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+     u8 *tmp_dec = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+     nx_emmc_part_read(&storage, prodinfo_part, 1, 1, tmp);
 
-    aes_xts_ctxt_t context;
-    aes_xts_init(&context, AES_DECRYPT, bis_key[0], bis_key[0] + 0x10, 128);
-    aes_xts_crypt(&context, 0, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
+    gfx_hexdump(0, tmp, 0x100);
+    //  aes_xts_ctxt_t context;
+    //  aes_xts_init(&context, AES_DECRYPT, bis_key[0], bis_key[0] + 0x10, 128);
+    // //  aes_xts_crypt(&context, 0, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
 
-    gfx_hexdump(0, tmp_dec, 0x10);
+    // // gfx_hexdump(0, tmp_dec, 0x100);
 
-    aes_xts_crypt(&context, prodinfo_part->lba_start, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
+    //  aes_xts_crypt(&context, 1, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
 
-    gfx_hexdump(0, tmp_dec, 0x10);
+    // gfx_hexdump(0, tmp_dec, 0x100);
 
-    se_aes_xts_crypt_sec(9, 8, 0, 0, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
+    disk_read_prod(tmp_dec, 1, 1);
+    //readData(tmp_dec, NX_EMMC_BLOCKSIZE, NX_EMMC_BLOCKSIZE);
 
-    gfx_hexdump(0, tmp_dec, 0x10);
+        gfx_hexdump(0, tmp_dec, 0x100);
 
-    se_aes_xts_crypt_sec(9, 8, 0, prodinfo_part->lba_start, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
+    //disk_write_prod(tmp_dec, 1, 1);
+    //gfx_hexdump(0, tmp_dec, 0x100);
 
-    gfx_hexdump(0, tmp_dec, 0x10);
+    se_aes_xts_crypt_sec(9, 8, 1, 1, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
 
+     gfx_hexdump(0, tmp, 0x100);
+
+
+
+
+    // se_aes_xts_crypt_sec(9, 8, 1, 0, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
+
+    // se_aes_xts_crypt_sec(9, 8, 0, 0, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
+
+    // gfx_hexdump(0, tmp_dec, 0x10);
+
+
+
+     free(tmp);
+     free(tmp_dec);
 
 
     // writeClientCertHash();
@@ -644,10 +668,11 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset) {
 bool readData(u8 *buffer, u32 offset, u32 length)
 {
 
-    u32 sector = (offset / NX_EMMC_BLOCKSIZE);
-    u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
-    u8 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
+    u32 sector = (offset / NX_EMMC_BLOCKSIZE); // 1
+    u32 newOffset = (offset % NX_EMMC_BLOCKSIZE); // 80
+
+    u32 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1; // 1
 
     // if(length + newOffset > NX_EMMC_BLOCKSIZE * 2){
     //     EPRINTF("TOO BIG!!");
@@ -656,6 +681,15 @@ bool readData(u8 *buffer, u32 offset, u32 length)
     //bool needMultipleSectors = newOffset + length > NX_EMMC_BLOCKSIZE;
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
+
+    // nx_emmc_part_read(&storage, prodinfo_part, sector, sectorCount, tmp);
+
+    // se_aes_xts_crypt(9, 8, 0, sector, tmp, tmp, NX_EMMC_BLOCKSIZE, sectorCount);
+
+    // memcpy(buffer, tmp + newOffset, length);
+
+
+
     disk_read_prod(tmp, sector, sectorCount);
 
     //  if (!needMultipleSectors)
@@ -691,6 +725,10 @@ bool writeData(u8 *buffer, u32 offset, u32 length)
     //bool needMultipleSectors = newOffset + length > NX_EMMC_BLOCKSIZE;
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
+
+
+
+
     disk_read_prod(tmp, sector, sectorCount);
 
     //  if (!needMultipleSectors)

@@ -277,6 +277,10 @@ int se_aes_xts_crypt_sec(u32 ks1, u32 ks2, u32 enc, u64 sec, void *dst, const vo
 	if (!se_aes_crypt_block_ecb(ks1, 1, tweak, tweak))
 		goto out;
 
+
+	u8 temptweak[0x10];
+    memcpy(temptweak, tweak, 0x10);
+	
 	//We are assuming a 0x10-aligned sector size in this implementation.
 	for (u32 i = 0; i < secsize / 0x10; i++)
 	{
@@ -290,6 +294,19 @@ int se_aes_xts_crypt_sec(u32 ks1, u32 ks2, u32 enc, u64 sec, void *dst, const vo
 		psrc += 0x10;
 		pdst += 0x10;
 	}
+
+
+	se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
+
+    pdst = (u8 *)dst;
+
+    memcpy(tweak, temptweak, 0x10);
+    for (u32 i = 0; i < secsize / 0x10; i++) {
+        for (u32 j = 0; j < 0x10; j++)
+            pdst[j] = pdst[j] ^ tweak[j];
+        _gf256_mul_x_le(tweak);
+        pdst += 0x10;
+    }
 
 	res = 1;
 

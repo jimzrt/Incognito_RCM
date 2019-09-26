@@ -182,7 +182,7 @@ DRESULT disk_write_prod (
         u32 tweak_exp = 0;
         bool regen_tweak = true;
 
-
+       
 
 
             if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
@@ -196,13 +196,12 @@ DRESULT disk_write_prod (
             }
 
             // fatfs will never pull more than a cluster
-            _emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-            nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff);
+            _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+
             prev_sector = sector + count - 1;
             return RES_OK;
         
     
-  //  return RES_ERROR;
 }
 
 

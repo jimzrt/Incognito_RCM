@@ -419,12 +419,12 @@ void dump_keys() {
 
         gfx_hexdump(0, tmp_dec, 0x100);
 
-    //disk_write_prod(tmp_dec, 1, 1);
-    //gfx_hexdump(0, tmp_dec, 0x100);
+    disk_write_prod(tmp_dec, 1, 1);
+    gfx_hexdump(0, tmp_dec, 0x100);
 
-    se_aes_xts_crypt_sec(9, 8, 1, 1, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
+    //se_aes_xts_crypt_sec(9, 8, 1, 1, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
 
-     gfx_hexdump(0, tmp, 0x100);
+     //gfx_hexdump(0, tmp, 0x100);
 
 
 

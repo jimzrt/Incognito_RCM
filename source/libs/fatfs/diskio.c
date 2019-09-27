@@ -196,7 +196,7 @@ DRESULT disk_write_prod (
             }
 
             // fatfs will never pull more than a cluster
-            _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+            _emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
 
             prev_sector = sector + count - 1;
             return RES_OK;

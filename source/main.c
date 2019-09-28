@@ -32,6 +32,7 @@
 #include "storage/sdmmc.h"
 #include "utils/sprintf.h"
 #include "utils/util.h"
+#include "utils/btn.h"
 
 #include "keys/keys.h"
 
@@ -153,6 +154,14 @@ void dump_sysnand()
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     dump_keys();
+    verifyProdinfo();
+    cleanUp();
+ //   verifyProdinfo();
+
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+   //     cleanUp();
+
+    btn_wait();
 }
 
 void dump_emunand()
@@ -162,11 +171,74 @@ void dump_emunand()
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
     dump_keys();
+    verifyProdinfo();
+    cleanUp();
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+    btn_wait();    
 }
 
+void backup_sysnand(){
+ h_cfg.emummc_force_disable = true;
+    b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
+        dump_keys();
+
+    backupProdinfo();
+        verifyProdinfo();
+    cleanUp();
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+    btn_wait();    
+}
+
+void backup_emunand(){
+if (h_cfg.emummc_force_disable)
+        return;
+    emu_cfg.enabled = 1;
+    b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
+            dump_keys();
+
+    backupProdinfo();
+        verifyProdinfo();
+    cleanUp();
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+    btn_wait();    
+}
+
+void restore_sysnand(){
+ h_cfg.emummc_force_disable = true;
+    b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
+            dump_keys();
+
+    restoreProdinfo();
+        verifyProdinfo();
+    cleanUp();
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+    btn_wait();    
+}
+
+void restore_emunand(){
+if (h_cfg.emummc_force_disable)
+        return;
+    emu_cfg.enabled = 1;
+    b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
+
+                dump_keys();
+
+    restoreProdinfo();
+        verifyProdinfo();
+    cleanUp();
+    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
+    btn_wait();  
+}
 ment_t ment_top[] = {
-	MDEF_HANDLER("Dump keys from SysNAND", dump_sysnand, COLOR_RED),
-    MDEF_HANDLER("Dump keys from emuMMC", dump_emunand, COLOR_ORANGE),
+	MDEF_HANDLER("Incognito (SysNAND)", dump_sysnand, COLOR_ORANGE),
+    MDEF_HANDLER("Incognito (emuMMC)", dump_emunand, COLOR_ORANGE),
+    MDEF_CAPTION("", COLOR_YELLOW),
+    MDEF_HANDLER("Backup (SysNAND)", backup_sysnand, COLOR_ORANGE),
+    MDEF_HANDLER("Backup (emuMMC)", backup_emunand, COLOR_ORANGE),
+    MDEF_CAPTION("", COLOR_YELLOW),
+    MDEF_HANDLER("Restore (SysNAND)", restore_sysnand, COLOR_ORANGE),
+    MDEF_HANDLER("Restore (emuMMC)", restore_emunand, COLOR_ORANGE),
+    MDEF_CAPTION("", COLOR_YELLOW),
 	MDEF_CAPTION("---------------", COLOR_YELLOW),
 	MDEF_HANDLER("Reboot (Normal)", reboot_normal, COLOR_GREEN),
 	MDEF_HANDLER("Reboot (RCM)", reboot_rcm, COLOR_BLUE),

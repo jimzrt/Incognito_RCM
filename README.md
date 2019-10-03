@@ -6,6 +6,8 @@ It is heavily based on [Lockpick_RCM](https://github.com/shchmue/Lockpick_RCM) a
 
 Massive Thanks to CTCaer, shchmue and blawar!
 
+This project is in early stage, so have a nand backup!! There is not much of error handling going on.
+
 Usage
 =
 * Launch Incoginito_RCM.bin using your favorite payload injector

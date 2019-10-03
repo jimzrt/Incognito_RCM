@@ -255,11 +255,12 @@ void restore_emunand()
     btn_wait();
 }
 ment_t ment_top[] = {
-    MDEF_HANDLER("Incognito (SysNAND)", incognito_sysnand, COLOR_ORANGE),
-    MDEF_HANDLER("Incognito (emuMMC)", incognito_emunand, COLOR_ORANGE),
-    MDEF_CAPTION("", COLOR_YELLOW),
     MDEF_HANDLER("Backup (SysNAND)", backup_sysnand, COLOR_ORANGE),
     MDEF_HANDLER("Backup (emuMMC)", backup_emunand, COLOR_ORANGE),
+    MDEF_CAPTION("", COLOR_YELLOW),
+    MDEF_HANDLER("Incognito (SysNAND)", incognito_sysnand, COLOR_ORANGE),
+    MDEF_HANDLER("Incognito (emuMMC)", incognito_emunand, COLOR_ORANGE),
+
     MDEF_CAPTION("", COLOR_YELLOW),
     MDEF_HANDLER("Restore (SysNAND)", restore_sysnand, COLOR_ORANGE),
     MDEF_HANDLER("Restore (emuMMC)", restore_emunand, COLOR_ORANGE),

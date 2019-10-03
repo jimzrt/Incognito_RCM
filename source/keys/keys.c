@@ -45,7 +45,6 @@
 
 #include "../libs/fatfs/diskio.h"
 #include <string.h>
-#include "sha256.h"
 
 extern bool sd_mount();
 extern void sd_unmount();
@@ -431,7 +430,19 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
-    disk_read_prod(tmp, sector, sectorCount, enc);
+    u32 clusterOffset = sector % 32;
+    u32 sectorOffset = 0;
+    while (clusterOffset + sectorCount > 32)
+    {
+        u32 sectorToRead = 32 - clusterOffset;
+        disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorToRead, enc);
+        sector += sectorToRead;
+        sectorCount -= sectorToRead;
+        clusterOffset = 0;
+        sectorOffset += sectorToRead;
+    }
+
+    disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc);
 
     memcpy(buffer, tmp + newOffset, length);
 
@@ -499,41 +510,10 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
 bool writeHash(u32 hashOffset, u32 offset, u32 sz)
 {
 
-    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
-
-    u32 newOffset = offset % NX_EMMC_BLOCKSIZE;
-
-    if (newOffset > 0 && newOffset + sz >= NX_EMMC_BLOCKSIZE)
-    {
-        u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
-        readData(buffer, offset, toRead, ENCRYPTED);
-        sha256_update(&ctx, buffer, toRead);
-
-        sz -= toRead;
-        offset += toRead;
-    }
-
-    while (sz > NX_EMMC_BLOCKSIZE)
-    {
-
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-        sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
-
-        sz -= NX_EMMC_BLOCKSIZE;
-        offset += NX_EMMC_BLOCKSIZE;
-    }
-
-    if (sz > 0)
-    {
-
-        readData(buffer, offset, sz, ENCRYPTED);
-        sha256_update(&ctx, buffer, sz);
-    }
+    u8 *buffer = (u8 *)malloc(sz);
+    readData(buffer, offset, sz, ENCRYPTED);
     u8 hash[0x20];
-    sha256_final(&ctx, hash);
+    se_calc_sha256(hash, buffer, sz);
 
     writeData(hash, hashOffset, 0x20, ENCRYPTED);
 
@@ -541,44 +521,30 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
     return true;
 }
 
+// void test(){
+//     u32 size = 32768;
+//     u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+//     u8* bigBuffer = (u8 *)malloc(size);
+//     u32 offset = 0;
+//     readData(bigBuffer, 0, size, ENCRYPTED);
+//     while(size > NX_EMMC_BLOCKSIZE){
+//         readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
+//         if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
+//             gfx_printf("arry mismatch on offset %d", offset);
+
+//         }
+//         size -= NX_EMMC_BLOCKSIZE;
+//         offset += NX_EMMC_BLOCKSIZE;
+//     }
+// }
+
 bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
     bool result = false;
-    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-
-    SHA256_CTX ctx;
-    sha256_init(&ctx);
-
-    u32 newOffset = offset % NX_EMMC_BLOCKSIZE;
-
-    if (newOffset > 0 && sz >= NX_EMMC_BLOCKSIZE)
-    {
-        u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
-        readData(buffer, offset, toRead, ENCRYPTED);
-        sha256_update(&ctx, buffer, toRead);
-
-        sz -= toRead;
-        offset += toRead;
-    }
-
-    while (sz > NX_EMMC_BLOCKSIZE)
-    {
-
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-        sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
-
-        sz -= NX_EMMC_BLOCKSIZE;
-        offset += NX_EMMC_BLOCKSIZE;
-    }
-
-    if (sz > 0)
-    {
-
-        readData(buffer, offset, sz, ENCRYPTED);
-        sha256_update(&ctx, buffer, sz);
-    }
+    u8 *buffer = (u8 *)malloc(sz);
+    readData(buffer, offset, sz, ENCRYPTED);
     u8 hash1[0x20];
-    sha256_final(&ctx, hash1);
+    se_calc_sha256(hash1, buffer, sz);
 
     u8 hash2[0x20];
 

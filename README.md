@@ -4,6 +4,7 @@ Incognito_RCM is a bare metal Nintendo Switch payload that derives encryption ke
 
 It is heavily based on [Lockpick_RCM](https://github.com/shchmue/Lockpick_RCM) and takes inspiration from [incognito](https://github.com/blawar/incognito).
 
+Massive Thanks to CTCaer, shchmue and blawar!
 
 Usage
 =
@@ -17,8 +18,6 @@ Keep in mind that backups will be overwritten, so don't backup after applying In
 Building
 =
 Install [devkitARM](https://devkitpro.org/) and run `make`.
-
-Massive Thanks to CTCaer, shchmue and blawar!
 
 Known Issues
 =

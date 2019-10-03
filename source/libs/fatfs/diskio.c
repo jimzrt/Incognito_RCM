@@ -133,10 +133,17 @@ DRESULT disk_read_prod (
 
     BYTE *buff,		/* Data buffer to store read data */
     DWORD sector,	/* Start sector in LBA */
-    UINT count		/* Number of sectors to read */
+    UINT count,		/* Number of sectors to read */
+    BYTE enc
     )
 {
 
+    if(enc == 0 ){
+         if (nx_emmc_part_read(&storage, prodinfo_part, sector, count, buff)) {
+             return RES_OK;
+         }
+         return RES_ERROR;
+    }
 
         __attribute__ ((aligned (16))) static u8 tweak[0x10];
         __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
@@ -171,10 +178,15 @@ DRESULT disk_write_prod (
 
     BYTE *buff,		/* Data buffer to store read data */
     DWORD sector,	/* Start sector in LBA */
-    UINT count		/* Number of sectors to read */
+    UINT count,		/* Number of sectors to read */
+    BYTE enc
     )
 {
 
+        if(enc == 0){
+             nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff);
+             return RES_OK;
+        }
 
         __attribute__ ((aligned (16))) static u8 tweak[0x10];
         __attribute__ ((aligned (16))) static u64 prev_cluster = -1;

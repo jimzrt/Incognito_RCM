@@ -38,11 +38,11 @@
 
 sdmmc_t sd_sdmmc;
 sdmmc_storage_t sd_storage;
-__attribute__ ((aligned (16))) FATFS sd_fs;
+__attribute__((aligned(16))) FATFS sd_fs;
 static bool sd_mounted;
 
 hekate_config h_cfg;
-boot_cfg_t __attribute__((section ("._boot_cfg"))) b_cfg;
+boot_cfg_t __attribute__((section("._boot_cfg"))) b_cfg;
 
 bool sd_mount()
 {
@@ -124,12 +124,12 @@ int sd_save_to_file(void *buf, u32 size, const char *filename)
 }
 
 // This is a safe and unused DRAM region for our payloads.
-#define RELOC_META_OFF      0x7C
-#define PATCHED_RELOC_SZ    0x94
+#define RELOC_META_OFF 0x7C
+#define PATCHED_RELOC_SZ 0x94
 #define PATCHED_RELOC_STACK 0x40007000
-#define COREBOOT_ADDR       (0xD0000000 - 0x100000)
-#define CBFS_DRAM_EN_ADDR   0x4003e000
-#define  CBFS_DRAM_MAGIC    0x4452414D // "DRAM"
+#define COREBOOT_ADDR (0xD0000000 - 0x100000)
+#define CBFS_DRAM_EN_ADDR 0x4003e000
+#define CBFS_DRAM_MAGIC 0x4452414D // "DRAM"
 
 void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
 {
@@ -139,8 +139,8 @@ void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
 
     relocator->start = payload_dst - ALIGN(PATCHED_RELOC_SZ, 0x10);
     relocator->stack = PATCHED_RELOC_STACK;
-    relocator->end   = payload_dst + payload_size;
-    relocator->ep    = payload_dst;
+    relocator->end = payload_dst + payload_size;
+    relocator->ep = payload_dst;
 
     if (payload_size == 0x7000)
     {
@@ -149,89 +149,114 @@ void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
     }
 }
 
-void dump_sysnand()
+void incognito_sysnand()
 {
+
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
-    dump_keys();
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
+    incognito();
     verifyProdinfo();
     cleanUp();
- //   verifyProdinfo();
 
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-   //     cleanUp();
-
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
 }
 
-void dump_emunand()
+void incognito_emunand()
 {
     if (h_cfg.emummc_force_disable)
         return;
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
-    dump_keys();
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
+    incognito();
     verifyProdinfo();
     cleanUp();
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-    btn_wait();    
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
+    btn_wait();
 }
 
-void backup_sysnand(){
- h_cfg.emummc_force_disable = true;
+void backup_sysnand()
+{
+    h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
-        dump_keys();
-
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
     backupProdinfo();
-        verifyProdinfo();
     cleanUp();
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-    btn_wait();    
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
+    btn_wait();
 }
 
-void backup_emunand(){
-if (h_cfg.emummc_force_disable)
+void backup_emunand()
+{
+    if (h_cfg.emummc_force_disable)
         return;
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
-            dump_keys();
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
 
     backupProdinfo();
-        verifyProdinfo();
     cleanUp();
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-    btn_wait();    
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
+    btn_wait();
 }
 
-void restore_sysnand(){
- h_cfg.emummc_force_disable = true;
+void restore_sysnand()
+{
+    h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
-            dump_keys();
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
 
     restoreProdinfo();
-        verifyProdinfo();
+    verifyProdinfo();
     cleanUp();
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-    btn_wait();    
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
+    btn_wait();
 }
 
-void restore_emunand(){
-if (h_cfg.emummc_force_disable)
+void restore_emunand()
+{
+    if (h_cfg.emummc_force_disable)
         return;
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
 
-                dump_keys();
+    if (!dump_keys())
+    {
+        cleanUp();
+        return;
+    }
 
     restoreProdinfo();
-        verifyProdinfo();
+    verifyProdinfo();
     cleanUp();
-    gfx_printf("\n%kPress any key to return to the main menu.", COLOR_GREEN);
-    btn_wait();  
+    gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
+    btn_wait();
 }
 ment_t ment_top[] = {
-	MDEF_HANDLER("Incognito (SysNAND)", dump_sysnand, COLOR_ORANGE),
-    MDEF_HANDLER("Incognito (emuMMC)", dump_emunand, COLOR_ORANGE),
+    MDEF_HANDLER("Incognito (SysNAND)", incognito_sysnand, COLOR_ORANGE),
+    MDEF_HANDLER("Incognito (emuMMC)", incognito_emunand, COLOR_ORANGE),
     MDEF_CAPTION("", COLOR_YELLOW),
     MDEF_HANDLER("Backup (SysNAND)", backup_sysnand, COLOR_ORANGE),
     MDEF_HANDLER("Backup (emuMMC)", backup_emunand, COLOR_ORANGE),
@@ -239,16 +264,15 @@ ment_t ment_top[] = {
     MDEF_HANDLER("Restore (SysNAND)", restore_sysnand, COLOR_ORANGE),
     MDEF_HANDLER("Restore (emuMMC)", restore_emunand, COLOR_ORANGE),
     MDEF_CAPTION("", COLOR_YELLOW),
-	MDEF_CAPTION("---------------", COLOR_YELLOW),
-	MDEF_HANDLER("Reboot (Normal)", reboot_normal, COLOR_GREEN),
-	MDEF_HANDLER("Reboot (RCM)", reboot_rcm, COLOR_BLUE),
-	MDEF_HANDLER("Power off", power_off, COLOR_VIOLET),
-	MDEF_END()
-};
+    MDEF_CAPTION("---------------", COLOR_YELLOW),
+    MDEF_HANDLER("Reboot (Normal)", reboot_normal, COLOR_GREEN),
+    MDEF_HANDLER("Reboot (RCM)", reboot_rcm, COLOR_BLUE),
+    MDEF_HANDLER("Power off", power_off, COLOR_VIOLET),
+    MDEF_END()};
 
-menu_t menu_top = { ment_top, NULL, 0, 0 };
+menu_t menu_top = {ment_top, NULL, 0, 0};
 
-#define IPL_STACK_TOP  0x4003F000
+#define IPL_STACK_TOP 0x4003F000
 #define IPL_HEAP_START 0x90020000
 
 extern void pivot_stack(u32 stack_top);

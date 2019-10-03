@@ -20,9 +20,10 @@
 #include "../utils/types.h"
 
 bool dump_keys();
+void incognito();
 void cleanUp();
-bool readData(u8 *buffer, u32 offset, u32 length);
-bool writeData(u8 *buffer, u32 offset, u32 length);
+bool readData(u8 *buffer, u32 offset, u32 length, u8 enc);
+bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc);
 bool writeClientCertHash();
 bool writeCal0Hash();
 bool verifyProdinfo();

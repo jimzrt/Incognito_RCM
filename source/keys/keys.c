@@ -47,8 +47,6 @@
 #include <string.h>
 #include "sha256.h"
 
-#include "aes_xts.h"
-
 extern bool sd_mount();
 extern void sd_unmount();
 extern int sd_save_to_file(void *buf, u32 size, const char *filename);
@@ -57,9 +55,13 @@ extern hekate_config h_cfg;
 
 u32 _key_count = 0;
 sdmmc_storage_t storage;
+sdmmc_t sdmmc;
 emmc_part_t *system_part;
 emmc_part_t *prodinfo_part;
 u32 start_time, end_time;
+
+#define ENCRYPTED 1
+#define DECRYPTED 0
 
 #define TPRINTF(text)                                           \
     end_time = get_tmr_us();                                    \
@@ -84,6 +86,8 @@ static u8 temp_key[0x10],
     master_kek[KB_FIRMWARE_VERSION_MAX + 1][0x10] = {0},
     master_key[KB_FIRMWARE_VERSION_MAX + 1][0x10] = {0};
 
+LIST_INIT(gpt);
+
 // key functions
 static bool _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed);
@@ -99,16 +103,17 @@ bool dump_keys()
     // gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
     //            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
+    gfx_printf("%kGetting bis_keys...\n", COLOR_YELLOW);
+
     start_time = get_tmr_us();
     //u32 begin_time = get_tmr_us();
     u32 retries = 0;
-    u32 color_idx = 0;
+    // u32 color_idx = 0;
 
     tsec_ctxt_t tsec_ctxt;
-    sdmmc_t sdmmc;
 
     emummc_storage_init_mmc(&storage, &sdmmc);
-    TPRINTFARGS("%kMMC init...     ", colors[(color_idx++) % 6]);
+    //  TPRINTFARGS("%kMMC init...     ", colors[(color_idx++) % 6]);
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
@@ -183,10 +188,10 @@ bool dump_keys()
     if (res < 0)
     {
         EPRINTFARGS("ERROR %x dumping TSEC.\n", res);
-       return false;
+        return false;
     }
 
-    TPRINTFARGS("%kTSEC key(s)...  ", colors[(color_idx++) % 6]);
+    //TPRINTFARGS("%kTSEC key(s)...  ", colors[(color_idx++) % 6]);
 
     // Master key derivation
     if (pkg1_id->kb == KB_FIRMWARE_VERSION_620 && _key_exists(tsec_keys + 0x10))
@@ -238,7 +243,7 @@ bool dump_keys()
     }
     free(keyblob_block);
 
-    TPRINTFARGS("%kMaster keys...  ", colors[(color_idx++) % 6]);
+    //TPRINTFARGS("%kMaster keys...  ", colors[(color_idx++) % 6]);
 
     u32 key_generation = 0;
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_500)
@@ -275,7 +280,7 @@ bool dump_keys()
 
     emummc_storage_set_mmc_partition(&storage, 0);
     // Parse eMMC GPT.
-    LIST_INIT(gpt);
+
     nx_emmc_gpt_parse(&gpt, &storage);
 
     // Find PRODINFO partition.
@@ -283,148 +288,82 @@ bool dump_keys()
     if (!prodinfo_part)
     {
         EPRINTF("Failed to locate PRODINFO.");
-       return false;
+        return false;
     }
-
-    // Read in package2 header and get package2 real size.
-
-    //  u8 *tmp_copy = (u8 *)malloc(NX_EMMC_BLOCKSIZE*2);
-
-    // nx_emmc_part_read(&storage, prodinfo_part, 0, 2, tmp);
-
-    // memcpy(tmp_copy, tmp, NX_EMMC_BLOCKSIZE*2);
-    // gfx_hexdump(0, tmp + 0x250, 0x18);
-
-    // aes_xtsn_decrypt(tmp_copy, NX_EMMC_BLOCKSIZE*2, bis_key[0], bis_key[0] + 0x10,  pkg2_part->lba_end, pkg2_part->lba_start, NX_EMMC_BLOCKSIZE);
-
-    //  gfx_hexdump(0, tmp_copy + 0x250, 0x18);
-    //  memcpy(tmp_copy, tmp, NX_EMMC_BLOCKSIZE*2);
 
     se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
-    //u32 length = 0x18;
-    // u8* buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    // readData(buffer, 0, NX_EMMC_BLOCKSIZE);
-    // gfx_hexdump(0, buffer, 0x08);
+    gfx_printf("%kGot keys!\n", COLOR_GREEN);
+    char serial[15];
+    readData((u8 *)serial, 0x250, 15, ENCRYPTED);
 
-    // readData(buffer, NX_EMMC_BLOCKSIZE, NX_EMMC_BLOCKSIZE);
-    // gfx_hexdump(0, buffer, 100);
+    gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
 
-    // free(buffer);
-
-    //verify();
-
-    // const char junkSerial[] = "XAJ40030771137";
-    // // gfx_hexdump(0, (u8 *)junkSerial, strlen(junkSerial));
-    // writeData((u8 *)junkSerial, 0x250, strlen(junkSerial));
-
-    // writeClientCertHash();
-    // writeCal0Hash();
-
-    // //  gfx_hexdump(0, buffer, sizeof(buffer));
-    // //free(buffer);
-
-    // // restore();
-
-    // // verify();
-
-    // //  u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    // u8 *tmp_dec = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    // //   nx_emmc_part_read(&storage, prodinfo_part, 1, 1, tmp);
-
-    // //  gfx_hexdump(0, tmp, 0x100);
-    // //  aes_xts_ctxt_t context;
-    // //  aes_xts_init(&context, AES_DECRYPT, bis_key[0], bis_key[0] + 0x10, 128);
-    // // //  aes_xts_crypt(&context, 0, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
-
-    // // // gfx_hexdump(0, tmp_dec, 0x100);
-
-    // //  aes_xts_crypt(&context, 1, NX_EMMC_BLOCKSIZE, tmp, tmp_dec);
-
-    // // gfx_hexdump(0, tmp_dec, 0x100);
-
-    // disk_read_prod(tmp_dec, 1, 1);
-    // //readData(tmp_dec, NX_EMMC_BLOCKSIZE, NX_EMMC_BLOCKSIZE);
-
-    // gfx_hexdump(0, tmp_dec, 0x100);
-
-    // // disk_write_prod(tmp_dec, 1, 1);
-    // // gfx_hexdump(0, tmp_dec, 0x100);
-
-    // //se_aes_xts_crypt_sec(9, 8, 1, 1, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
-
-    // //gfx_hexdump(0, tmp, 0x100);
-
-    // // se_aes_xts_crypt_sec(9, 8, 1, 0, tmp, tmp_dec, NX_EMMC_BLOCKSIZE);
-
-    // // se_aes_xts_crypt_sec(9, 8, 0, 0, tmp_dec, tmp, NX_EMMC_BLOCKSIZE);
-
-    // // gfx_hexdump(0, tmp_dec, 0x10);
-
-    // //  free(tmp);
-    // free(tmp_dec);
-
-    // // writeClientCertHash();
-    // //  writeCal0Hash();
-
-    // verify();
-
-    // // verify();
-    // // free(tmp_copy);
-
-    // //   pkg2_done:
-    // //     // free(pkg2);
-    // //     // free(ki);
-
-    // //     TPRINTFARGS("%kFS keys...      ", colors[(color_idx++) % 6]);
-
-    // //     // DIR dir;
-    // //     // FILINFO fno;
-    // //     // FIL fp;
-
-    // //    // f_closedir(&dir);
-
-    // //    // f_close(&fp);
-
-    // //     TPRINTFARGS("%kSD Seed...      ", colors[(color_idx++) % 6]);
-
-// dismount:
-//     nx_emmc_gpt_free(&gpt);
-//     emummc_storage_end(&storage);
-
-//     end_time = get_tmr_us();
-//     gfx_printf("\n%kFound %d keys.", colors[(color_idx++) % 6], _key_count);
-//     _key_count = 0;
-//     gfx_printf("\n%kLockpick totally done in %d us", colors[(color_idx++) % 6], end_time - begin_time);
-//     gfx_printf("\n%kFound through master_key_%02x\n", colors[(color_idx++) % 6], MAX_KEY - 1);
-
-//     // f_mkdir("sd:/switch");
-//     // char keyfile_path[30] = "sd:/switch/";
-//     // if (!(fuse_read_odm(4) & 3))
-//     //     sprintf(&keyfile_path[11], "prod.keys");
-//     // else
-//     //     sprintf(&keyfile_path[11], "dev.keys");
-//     // if (sd_mount() && !sd_save_to_file(text_buffer, strlen(text_buffer), keyfile_path) && !f_stat(keyfile_path, &fno)) {
-//     //     gfx_printf("%kWrote %d bytes to %s\n", colors[(color_idx++) % 6], (u32)fno.fsize, keyfile_path);
-//     // } else
-//     //     EPRINTF("Failed to save keys to SD.");
-     h_cfg.emummc_force_disable = emummc_load_cfg();
-
-// out_wait:
-//     // sd_unmount();
-//     gfx_printf("\n%kPress any key to return to the main menu.", colors[(color_idx) % 6], colors[(color_idx + 1) % 6], colors[(color_idx + 2) % 6]);
-
-//     btn_wait();
-   // nx_emmc_gpt_free(&gpt);
-    gfx_printf("\n%kFound keys.\n\n", colors[(color_idx++) % 6]);
     return true;
 }
 
+void erase(u32 offset, u32 length)
+{
 
-void cleanUp(){
-    
-    emummc_storage_end(&storage);
+    u8 *tmp = (u8 *)calloc(length, sizeof(u8));
+    writeData(tmp, offset, length, ENCRYPTED);
+    free(tmp);
+}
+
+void writeSerial()
+{
+    const char *junkSerial;
+    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    {
+        junkSerial = "XAW00000000000";
+    }
+    else
+    {
+        junkSerial = "XAW00000000001";
+    }
+
+    writeData((u8 *)junkSerial, 0x250, 14, ENCRYPTED);
+}
+
+void incognito()
+{
+
+    gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
+
+    writeSerial();
+    gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
+    erase(0x0AE0, 0x800); // client cert
+    gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
+    erase(0x3AE0, 0x130); // private key
+    gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
+    erase(0x35E1, 0x006); // deviceId
+    gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
+    erase(0x36E1, 0x006); // deviceId
+    gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
+    erase(0x02B0, 0x180); // device cert
+    gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
+    erase(0x3D70, 0x240); // device cert
+    gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
+
+    erase(0x3FC0, 0x240); // device key
+
+    gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
+
+    writeClientCertHash();
+    gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
+
+    writeCal0Hash();
+
+    gfx_printf("\n%kIncognito done!\n\n", COLOR_GREEN);
+}
+
+void cleanUp()
+{
+
+    h_cfg.emummc_force_disable = emummc_load_cfg();
+    //nx_emmc_gpt_free(&gpt);
+    //   emummc_storage_end(&storage);
 }
 
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed)
@@ -447,7 +386,7 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset)
            (*(u8 *)(buffer + offset + 3) << 0x18);
 }
 
-bool readData(u8 *buffer, u32 offset, u32 length)
+bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
 {
 
     // u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
@@ -492,16 +431,16 @@ bool readData(u8 *buffer, u32 offset, u32 length)
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
-    disk_read_prod(tmp, sector, sectorCount);
+    disk_read_prod(tmp, sector, sectorCount, enc);
 
     memcpy(buffer, tmp + newOffset, length);
 
     free(tmp);
 
-     return true;
+    return true;
 }
 
-bool writeData(u8 *buffer, u32 offset, u32 length)
+bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
 {
 
     // u8 *tmp = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
@@ -539,9 +478,6 @@ bool writeData(u8 *buffer, u32 offset, u32 length)
 
     // free(tmp);
 
-
-
-
     u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
@@ -549,15 +485,15 @@ bool writeData(u8 *buffer, u32 offset, u32 length)
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
-    disk_read_prod(tmp, sector, sectorCount);
+    disk_read_prod(tmp, sector, sectorCount, 1);
 
     memcpy(tmp + newOffset, buffer, length);
 
-    disk_write_prod(tmp, sector, sectorCount);
+    disk_write_prod(tmp, sector, sectorCount, enc);
 
     free(tmp);
 
-     return true;
+    return true;
 }
 
 bool writeHash(u32 hashOffset, u32 offset, u32 sz)
@@ -573,7 +509,7 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
     if (newOffset > 0 && newOffset + sz >= NX_EMMC_BLOCKSIZE)
     {
         u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
-        readData(buffer, offset, toRead);
+        readData(buffer, offset, toRead, ENCRYPTED);
         sha256_update(&ctx, buffer, toRead);
 
         sz -= toRead;
@@ -583,7 +519,7 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
     while (sz > NX_EMMC_BLOCKSIZE)
     {
 
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
         sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
 
         sz -= NX_EMMC_BLOCKSIZE;
@@ -593,13 +529,13 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
     if (sz > 0)
     {
 
-        readData(buffer, offset, sz);
+        readData(buffer, offset, sz, ENCRYPTED);
         sha256_update(&ctx, buffer, sz);
     }
     u8 hash[0x20];
     sha256_final(&ctx, hash);
 
-    writeData(hash, hashOffset, 0x20);
+    writeData(hash, hashOffset, 0x20, ENCRYPTED);
 
     free(buffer);
     return true;
@@ -618,7 +554,7 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     if (newOffset > 0 && sz >= NX_EMMC_BLOCKSIZE)
     {
         u32 toRead = NX_EMMC_BLOCKSIZE - newOffset;
-        readData(buffer, offset, toRead);
+        readData(buffer, offset, toRead, ENCRYPTED);
         sha256_update(&ctx, buffer, toRead);
 
         sz -= toRead;
@@ -628,7 +564,7 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     while (sz > NX_EMMC_BLOCKSIZE)
     {
 
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE);
+        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
         sha256_update(&ctx, buffer, NX_EMMC_BLOCKSIZE);
 
         sz -= NX_EMMC_BLOCKSIZE;
@@ -638,7 +574,7 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     if (sz > 0)
     {
 
-        readData(buffer, offset, sz);
+        readData(buffer, offset, sz, ENCRYPTED);
         sha256_update(&ctx, buffer, sz);
     }
     u8 hash1[0x20];
@@ -646,19 +582,18 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 
     u8 hash2[0x20];
 
-    readData(hash2, hashOffset, 0x20);
+    readData(hash2, hashOffset, 0x20, ENCRYPTED);
 
     if (memcmp(hash1, hash2, 0x20))
     {
         EPRINTF("error: hash verification failed\n");
+        gfx_hexdump(0, hash1, 0x20);
+        gfx_hexdump(0, hash2, 0x20);
     }
     else
     {
         result = true;
     }
-
-    gfx_hexdump(0, hash1, 0x20);
-    gfx_hexdump(0, hash2, 0x20);
 
     free(buffer);
     return result;
@@ -667,14 +602,14 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 u32 certSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer));
+    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), ENCRYPTED);
     return buffer;
 }
 
 u32 calibrationDataSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x08, sizeof(buffer));
+    readData((u8 *)&buffer, 0x08, sizeof(buffer), ENCRYPTED);
     return buffer;
 }
 
@@ -701,23 +636,54 @@ bool verifyClientCertHash()
 
 bool verifyProdinfo()
 {
-    return verifyClientCertHash() && verifyCal0Hash();
-    // bool r = verifyHash(0x12E0, 0xAE0, certSize());      // client cert hash
-    // r &= verifyHash(0x20, 0x40, calibrationDataSize()); // calibration hash
 
-    // return r;
+    gfx_printf("%kVerifying client cert hash and CAL0 hash...\n", COLOR_YELLOW);
+
+    if (verifyClientCertHash() && verifyCal0Hash())
+    {
+        char serial[15];
+        readData((u8 *)serial, 0x250, 15, ENCRYPTED);
+        gfx_printf("%kVerification successful!\n%kNew Serial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
+        return true;
+    }
+    gfx_printf("%kVerification not successful!\nPlease restore backup!\n", COLOR_RED);
+    return false;
+}
+
+void print_progress(size_t count, size_t max)
+{
+    const char prefix[] = "Progress: [";
+    const char suffix[] = "]";
+    const size_t prefix_length = sizeof(prefix) - 1;
+    const size_t suffix_length = sizeof(suffix) - 1;
+    char *buffer = calloc(max + prefix_length + suffix_length + 1, 1); // +1 for \0
+    size_t i = 0;
+
+    strcpy(buffer, prefix);
+    for (; i < max; ++i)
+    {
+        buffer[prefix_length + i] = i < count ? '#' : ' ';
+    }
+
+    strcpy(&buffer[prefix_length + i], suffix);
+    gfx_printf("%k%s %d%%\n", COLOR_BLUE, buffer, (100 / max) * count);
+    free(buffer);
 }
 
 bool backupProdinfo()
 {
-    sd_mount();
-     char* name;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable){
+    char *name;
+    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    {
         name = "sd:/prodinfo_sysnand.bin";
-    } else {
-       
-         name = "sd:/prodinfo_emunand.bin";
     }
+    else
+    {
+
+        name = "sd:/prodinfo_emunand.bin";
+    }
+
+    gfx_printf("%kBacking up %s...\n", COLOR_YELLOW, name);
 
     if (f_stat(name, NULL))
     {
@@ -725,48 +691,49 @@ bool backupProdinfo()
     }
     FIL fp;
     f_open(&fp, name, FA_CREATE_ALWAYS | FA_WRITE);
-    u8 bufferNX[NX_EMMC_BLOCKSIZE];
+    u8 *bufferNX = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
     u32 size = 0x3FBC00;
+
+    u8 percentDone = 0;
     u32 offset = 0;
+    const u8 step = 5;
+
+    u32 iterations = size / NX_EMMC_BLOCKSIZE;
+    u32 printCount = iterations / (100 / step);
+
+    u32 x = gfx_con.x;
+    u32 y = gfx_con.y;
+
     while (size > NX_EMMC_BLOCKSIZE)
     {
-        readData(bufferNX, offset, NX_EMMC_BLOCKSIZE);
+        readData(bufferNX, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
         f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
         f_sync(&fp);
+
         offset += NX_EMMC_BLOCKSIZE;
         size -= NX_EMMC_BLOCKSIZE;
+        if (iterations % printCount == 0)
+        {
+            print_progress(percentDone / step, 100 / step);
+            gfx_con.x = x;
+            gfx_con.y = y;
+            percentDone += step;
+        }
+        iterations--;
     }
     if (size > 0)
     {
-        readData(bufferNX, offset, size);
+        readData(bufferNX, offset, size, ENCRYPTED);
         f_write(&fp, bufferNX, size, NULL);
         f_sync(&fp);
-
     }
 
+    print_progress(100 / step, 100 / step);
+
     f_close(&fp);
+    free(bufferNX);
+    gfx_printf("%k\nBackup %s done!\n\n", COLOR_GREEN, name);
 
-    gfx_printf("%kBackup %s done!\n\n", COLOR_GREEN, name);
-
-    // if (f_stat("sd:/prodinfoENC.bin", NULL))
-    // {
-    //     f_unlink("sd:/prodinfoENC.bin");
-    // }
-
-    // f_open(&fp, "sd:/prodinfoENC.bin", FA_CREATE_NEW | FA_WRITE);
-    // size = 0x3FBC00;
-    // offset = 0;
-    // while (size > 0)
-    // {
-    //     nx_emmc_part_read(&storage, prodinfo_part, offset, 1, bufferNX);
-    //     f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
-    //     offset++;
-    //     size -= NX_EMMC_BLOCKSIZE;
-    // }
-
-    // f_close(&fp);
-
-    // gfx_printf("\n%kBackup encrypted done!", colors[4]);
     return true;
 }
 
@@ -774,14 +741,18 @@ bool restoreProdinfo()
 {
     sd_mount();
 
-     char* name;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable){
+    char *name;
+    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    {
         name = "sd:/prodinfo_sysnand.bin";
-    } else {
-       
-         name = "sd:/prodinfo_emunand.bin";
+    }
+    else
+    {
+
+        name = "sd:/prodinfo_emunand.bin";
     }
 
+    gfx_printf("%kRestoring %s...\n", COLOR_YELLOW, name);
 
     FIL fp;
     if (f_open(&fp, name, FA_READ) != FR_OK)
@@ -792,35 +763,41 @@ bool restoreProdinfo()
     u8 bufferNX[NX_EMMC_BLOCKSIZE];
 
     u32 size = 0x3FBC00;
+
+    u8 percentDone = 0;
     u32 offset = 0;
-    while (size > 0)
+    const u8 step = 5;
+
+    u32 iterations = size / NX_EMMC_BLOCKSIZE;
+    u32 printCount = iterations / (100 / step);
+
+    u32 x = gfx_con.x;
+    u32 y = gfx_con.y;
+
+    while (size > NX_EMMC_BLOCKSIZE)
     {
         f_read(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
-        writeData(bufferNX,offset,NX_EMMC_BLOCKSIZE);
-        //nx_emmc_part_write(&storage, prodinfo_part, offset, 1, bufferNX);
-        offset+= NX_EMMC_BLOCKSIZE;
+        writeData(bufferNX, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
+        offset += NX_EMMC_BLOCKSIZE;
         size -= NX_EMMC_BLOCKSIZE;
+        if (iterations % printCount == 0)
+        {
+            print_progress(percentDone / step, 100 / step);
+            gfx_con.x = x;
+            gfx_con.y = y;
+            percentDone += step;
+        }
+        iterations--;
     }
-    //  if(size > 0){
-    //      f_read(&fp, bufferNX, size, NULL);
-    //      nx_emmc_part_write(&storage, prodinfo_part, offset, 1, bufferNX);
-    //      f_write(&fp, bufferNX, size, NULL);
-    //  }
+    if (size > 0)
+    {
+        f_read(&fp, bufferNX, size, NULL);
+        writeData(bufferNX, offset, size, ENCRYPTED);
+    }
+    print_progress(100 / step, 100 / step);
 
     f_close(&fp);
 
-     gfx_printf("%kRestore %s done!\n\n", COLOR_GREEN, name);
+    gfx_printf("%kRestore %s done!\n\n", COLOR_GREEN, name);
     return true;
 }
-
-// bool erase(u32 offset, u32 sz)
-// 	{
-// 		u8 zero = 0;
-
-// 		for (u64 i = 0; i < sz; i++)
-// 		{
-// 			fsStorageWrite(&m_sh, offset + i, &zero, 1);
-// 		}
-
-// 		return true;
-// 	}

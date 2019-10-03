@@ -400,14 +400,15 @@ void gfx_printf(const char *fmt, ...)
 void gfx_print_header()
 {
 	u8 prevFontSize = gfx_con.fntsz;
-	gfx_con.fntsz = 14;
+	gfx_con.fntsz = 15;
 	gfx_printf("%k    ____                             _ __             ____  ________  ___\n", colors[4]);
 	gfx_printf("%k   /  _/___  _________  ____ _____  (_) /_____       / __ \\/ ____/  |/  /\n", COLOR_GREEN);
 	gfx_printf("%k   / // __ \\/ ___/ __ \\/ __ `/ __ \\/ / __/ __ \\     / /_/ / /   / /|_/ / \n", COLOR_GREEN);
 	gfx_printf("%k _/ // / / / /__/ /_/ / /_/ / / / / / /_/ /_/ /    / _, _/ /___/ /  / /  \n", COLOR_GREEN);
 	gfx_printf("%k/___/_/ /_/\\___/\\____/\\__, /_/ /_/_/\\__/\\____/____/_/ |_|\\____/_/  /_/   \n", colors[4]);
 	gfx_printf("%k                     /____/                 /_____/                      \n", colors[4]);
-	gfx_printf("%kv%d.%d.%d%k\n\n\n\n",
+	gfx_con.fntsz = 14;
+	gfx_printf("%kv%d.%d.%d - by jimzrt%k\n\n\n\n",
 			   colors[4], LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 	gfx_con.fntsz = prevFontSize;
 }

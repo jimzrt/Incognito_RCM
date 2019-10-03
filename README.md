@@ -1,23 +1,33 @@
-Lockpick_RCM
+Incognito_RCM
 =
-Lockpick_RCM is a bare metal Nintendo Switch payload that derives encryption keys for use in Switch file handling software like hactool, hactoolnet/LibHac, ChoiDujour, etc. without booting Horizon OS.
+Incognito_RCM is a bare metal Nintendo Switch payload that derives encryption keys for de- and encrypting PRODINFO partition (sysnand and emummc) and wiping personal information from your Nintendo Switch as to go online while worrying slightly less about a ban.
 
-Due to changes imposed by firmware 7.0.0, Lockpick homebrew can no longer derive the latest keys. In the boot-time environment however, there is no such limitation.
+It is heavily based on [Lockpick_RCM](https://github.com/shchmue/Lockpick_RCM) and takes inspiration from [incognito](https://github.com/blawar/incognito).
+
 
 Usage
 =
-* Launch Lockpick_RCM.bin using your favorite payload injector
-* Upon completion, keys will be saved to `/switch/prod.keys` on SD
-* If the console has Firmware 7.x or higher, the `/sept/` folder from [Atmosphère](https://github.com/Atmosphere-NX/Atmosphere/releases) or [Kosmos](https://github.com/AtlasNX/Kosmos/releases) release zip must be present on SD or else only keyblob master key derivation is possible (ie. up to `master_key_05` only)
+* Launch Incoginito_RCM.bin using your favorite payload injector
+* Use menu to make a backup! (Will be written to `sd:/prodinfo_sysnand.bin` and `sd:/prodinfo_emunand.bin` respectively)
+* Choose either Incognito (sysNAND) or Incognito (emuMMC) to wipe personal information
+* If you ever want to revert, choose restore menu points
+
+Keep in mind that backups will be overwritten, so don't backup after applying Incognito!
 
 Building
 =
 Install [devkitARM](https://devkitpro.org/) and run `make`.
 
-Massive Thanks to CTCaer!
-=
-This software is heavily based on [Hekate](https://github.com/CTCaer/hekate). Beyond that, CTCaer was exceptionally helpful in the development of this project, lending loads of advice, expertise, and humor.
+Massive Thanks to CTCaer, shchmue and blawar!
 
 Known Issues
 =
 * Chainloading from SX will hang immediately due to quirks in their hwinit code, please launch payload directly
+
+Disclaimers
+=
+* This application does not remove all personal information from your Switch, and should not be treated as a true preventative measure against getting banned.
+
+* ALWAYS have a NAND backup. I am not responsible for any bricks or bans. Use at your own risk, as this is an experimental program.
+
+* This application backs up your PRODINFO to the SD card. You should keep this backup in a more secure location, and not leave it on the SD card where it could be subject to corruption or be read by malicious applications.

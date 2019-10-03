@@ -27,7 +27,6 @@
 #include "diskio.h"		/* FatFs lower layer API */
 #include "../../mem/heap.h"
 #include "../../sec/se.h"
-#include "../../keys/aes_xts.h"
 
 
 #define SDMMC_UPPER_BUFFER 0xB8000000

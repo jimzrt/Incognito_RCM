@@ -57,8 +57,7 @@ sdmmc_t sdmmc;
 emmc_part_t *system_part;
 emmc_part_t *prodinfo_part;
 
-#define ENCRYPTED 1
-#define DECRYPTED 0
+
 #define SECTORS_IN_CLUSTER 32
 #define PRODINFO_SIZE 0x3FBC00
 
@@ -276,7 +275,7 @@ bool dump_keys()
 
     gfx_printf("%kGot keys!\n", COLOR_GREEN);
     char serial[15];
-    readData((u8 *)serial, 0x250, 15, ENCRYPTED, NULL);
+    readData((u8 *)serial, 0x250, 15, NULL);
 
     gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
 
@@ -287,7 +286,7 @@ bool erase(u32 offset, u32 length)
 {
 
     u8 *tmp = (u8 *)calloc(length, sizeof(u8));
-    bool result = writeData(tmp, offset, length, ENCRYPTED, NULL);
+    bool result = writeData(tmp, offset, length, NULL);
     free(tmp);
     return result;
 }
@@ -304,7 +303,7 @@ bool writeSerial()
         junkSerial = "XAW00000000001";
     }
 
-    return writeData((u8 *)junkSerial, 0x250, 14, ENCRYPTED, NULL);
+    return writeData((u8 *)junkSerial, 0x250, 14, NULL);
 }
 
 bool incognito()
@@ -395,7 +394,7 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset)
            (*(u8 *)(buffer + offset + 3) << 0x18);
 }
 
-bool readData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32))
+bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32, u32))
 {
 
     if (progress_callback != NULL)
@@ -415,7 +414,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callba
     while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
+        if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead) != RES_OK)
             goto out;
 
         sector += sectorsToRead;
@@ -430,7 +429,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callba
     if (sectorCount == 0)
         goto done;
 
-    if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
+    if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount) != RES_OK)
         goto out;
 
     memcpy(buffer, tmp + newOffset, length);
@@ -445,7 +444,7 @@ out:
     return result;
 }
 
-bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32))
+bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32, u32))
 {
     if (progress_callback != NULL)
     {
@@ -474,11 +473,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callb
         {
             bytesToWrite = length;
         }
-        if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
+        if (disk_read_prod(tmp_sec, sector, 1) != RES_OK)
             goto out;
 
         memcpy(tmp_sec + newOffset, buffer, bytesToWrite);
-        if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
+        if (disk_write_prod(tmp_sec, sector, 1) != RES_OK)
             goto out;
 
         sector++;
@@ -503,7 +502,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callb
     while (clusterOffset + sectorCount >= SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
+        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead) != RES_OK)
             goto out;
 
         sector += sectorsToRead;
@@ -521,7 +520,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callb
     // write remaining sectors
     if (sectorCount > 0)
     {
-        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
+        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount) != RES_OK)
             goto out;
 
         length -= sectorCount * NX_EMMC_BLOCKSIZE;
@@ -544,11 +543,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callb
         goto out;
     }
 
-    if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
+    if (disk_read_prod(tmp_sec, sector, 1) != RES_OK)
         goto out;
 
     memcpy(tmp_sec, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
-    if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
+    if (disk_write_prod(tmp_sec, sector, 1) != RES_OK)
         goto out;
 
 done:
@@ -567,14 +566,14 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    if (!readData(buffer, offset, sz, ENCRYPTED, NULL))
+    if (!readData(buffer, offset, sz, NULL))
     {
         goto out;
     }
     u8 hash[0x20];
     se_calc_sha256(hash, buffer, sz);
 
-    if (!writeData(hash, hashOffset, 0x20, ENCRYPTED, NULL))
+    if (!writeData(hash, hashOffset, 0x20, NULL))
     {
         goto out;
     }
@@ -610,13 +609,13 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    readData(buffer, offset, sz, ENCRYPTED, NULL);
+    readData(buffer, offset, sz, NULL);
     u8 hash1[0x20];
     se_calc_sha256(hash1, buffer, sz);
 
     u8 hash2[0x20];
 
-    readData(hash2, hashOffset, 0x20, ENCRYPTED, NULL);
+    readData(hash2, hashOffset, 0x20, NULL);
 
     if (memcmp(hash1, hash2, 0x20))
     {
@@ -636,14 +635,14 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 u32 certSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), ENCRYPTED, NULL);
+    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL);
     return buffer;
 }
 
 u32 calibrationDataSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x08, sizeof(buffer), ENCRYPTED, NULL);
+    readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL);
     return buffer;
 }
 
@@ -676,7 +675,7 @@ bool verifyProdinfo()
     if (verifyClientCertHash() && verifyCal0Hash())
     {
         char serial[15];
-        readData((u8 *)serial, 0x250, 15, ENCRYPTED, NULL);
+        readData((u8 *)serial, 0x250, 15, NULL);
         gfx_printf("%kVerification successful!\n%kNew Serial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
         return true;
     }
@@ -791,7 +790,7 @@ bool backupProdinfo()
 
     u8 *bufferNX = (u8 *)malloc(PRODINFO_SIZE);
     gfx_printf("%kReading from NAND...\n", COLOR_YELLOW);
-    if (!readData(bufferNX, 0, PRODINFO_SIZE, ENCRYPTED, print_progress))
+    if (!readData(bufferNX, 0, PRODINFO_SIZE, print_progress))
     {
         gfx_printf("\n%kError reading from NAND!\n", COLOR_RED);
         goto out;
@@ -848,7 +847,7 @@ bool restoreProdinfo()
         goto out;
     }
     gfx_printf("%kWriting to NAND...\n", COLOR_YELLOW);
-    if (!writeData(bufferNX, 0, PRODINFO_SIZE, ENCRYPTED, print_progress))
+    if (!writeData(bufferNX, 0, PRODINFO_SIZE, print_progress))
     {
         gfx_printf("\n%kError writing to NAND!\nThis is bad. Try again, because your switch probably won't boot.\n"
                    "If you see this error again, you should restore via NAND backup in hekate.\n",

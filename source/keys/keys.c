@@ -61,6 +61,7 @@ u32 start_time, end_time;
 #define ENCRYPTED 1
 #define DECRYPTED 0
 #define SECTORS_IN_CLUSTER 32
+#define PRODINFO_SIZE 0x3FBC00
 
 
 static u8 temp_key[0x10],
@@ -542,22 +543,26 @@ bool writeHash(u32 hashOffset, u32 offset, u32 sz)
     return true;
 }
 
-// void test(){
-//     u32 size = 32768;
-//     u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-//     u8* bigBuffer = (u8 *)malloc(size);
-//     u32 offset = 0;
-//     readData(bigBuffer, 0, size, ENCRYPTED);
-//     while(size > NX_EMMC_BLOCKSIZE){
-//         readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-//         if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
-//             gfx_printf("arry mismatch on offset %d", offset);
+void test(){
+    u32 size = 262144;
+    gfx_printf("%kTest reading %s bytes\n", COLOR_ORANGE, size);
+    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    u8* bigBuffer = (u8 *)malloc(size);
+    u32 offset = 0;
+    readData(bigBuffer, 0, size, ENCRYPTED);
+    while(size > NX_EMMC_BLOCKSIZE){
+        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
+        if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
+            gfx_printf("arry mismatch on offset %d", offset);
 
-//         }
-//         size -= NX_EMMC_BLOCKSIZE;
-//         offset += NX_EMMC_BLOCKSIZE;
-//     }
-// }
+        }
+        size -= NX_EMMC_BLOCKSIZE;
+        offset += NX_EMMC_BLOCKSIZE;
+    }
+    free(buffer);
+    free(bigBuffer);
+    gfx_printf("%Reading Done!\n", COLOR_ORANGE, size);
+}
 
 bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
@@ -657,6 +662,31 @@ void print_progress(size_t count, size_t max)
     free(buffer);
 }
 
+bool getLastBackup(){
+    DIR dir;
+    //char* path = "sd:/incognito";
+    char path[255];
+    strcpy(path, "sd:/incognito");
+    FILINFO fno;
+    FRESULT res;
+
+    res = f_opendir(&dir, path);                       /* Open the directory */
+    if (res == FR_OK) {
+        for (;;) {
+            res = f_readdir(&dir, &fno);                   /* Read a directory item */
+            if (res != FR_OK || fno.fname[0] == 0) break;  /* Break on error or end of dir */
+            if ((fno.fattrib & AM_DIR) == 0) {                    /* It is not a directory */
+                 gfx_printf("%s/%s\n", path, fno.fname);
+            }
+        }
+        f_closedir(&dir);
+    }
+
+    return res;
+
+
+}
+
 bool backupProdinfo()
 {
     char *name;
@@ -679,7 +709,7 @@ bool backupProdinfo()
     FIL fp;
     f_open(&fp, name, FA_CREATE_ALWAYS | FA_WRITE);
     u8 *bufferNX = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    u32 size = 0x3FBC00;
+    u32 size = PRODINFO_SIZE;
 
     u8 percentDone = 0;
     u32 offset = 0;
@@ -749,7 +779,7 @@ bool restoreProdinfo()
     }
     u8 bufferNX[NX_EMMC_BLOCKSIZE];
 
-    u32 size = 0x3FBC00;
+    u32 size = PRODINFO_SIZE;
 
     u8 percentDone = 0;
     u32 offset = 0;

@@ -159,7 +159,8 @@ void incognito_sysnand()
         cleanUp();
         return;
     }
-    incognito();
+    //incognito();
+    test();
     verifyProdinfo();
     cleanUp();
 
@@ -178,7 +179,8 @@ void incognito_emunand()
         cleanUp();
         return;
     }
-    incognito();
+    test();
+    //incognito();
     verifyProdinfo();
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);

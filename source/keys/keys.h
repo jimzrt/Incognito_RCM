@@ -19,6 +19,10 @@
 
 #include "../utils/types.h"
 
+//testing
+void test();
+//testing
+
 bool dump_keys();
 void incognito();
 void cleanUp();

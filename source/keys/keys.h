@@ -24,14 +24,16 @@ void test();
 //testing
 
 bool dump_keys();
-void incognito();
+bool incognito();
 void cleanUp();
-bool readData(u8 *buffer, u32 offset, u32 length, u8 enc);
-bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc);
+bool readData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32));
+bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32));
 bool writeClientCertHash();
 bool writeCal0Hash();
 bool verifyProdinfo();
 bool backupProdinfo();
 bool restoreProdinfo();
+bool checkBackupExists();
+void print_progress(u32 count, u32 max);
 
 #endif

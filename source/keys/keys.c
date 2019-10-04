@@ -56,13 +56,14 @@ sdmmc_storage_t storage;
 sdmmc_t sdmmc;
 emmc_part_t *system_part;
 emmc_part_t *prodinfo_part;
-u32 start_time, end_time;
 
 #define ENCRYPTED 1
 #define DECRYPTED 0
 #define SECTORS_IN_CLUSTER 32
 #define PRODINFO_SIZE 0x3FBC00
 
+#define BACKUP_NAME_EMUNAND "sd:/prodinfo_emunand.bin"
+#define BACKUP_NAME_SYSNAND "sd:/prodinfo_sysnand.bin"
 
 static u8 temp_key[0x10],
     bis_key[4][0x20] = {0},
@@ -90,20 +91,13 @@ bool dump_keys()
 
     gfx_print_header();
 
-    // gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
-    //            colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
-
     gfx_printf("%kGetting bis_keys...\n", COLOR_YELLOW);
 
-    start_time = get_tmr_us();
-    //u32 begin_time = get_tmr_us();
     u32 retries = 0;
-    // u32 color_idx = 0;
 
     tsec_ctxt_t tsec_ctxt;
 
     emummc_storage_init_mmc(&storage, &sdmmc);
-    //  TPRINTFARGS("%kMMC init...     ", colors[(color_idx++) % 6]);
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
@@ -181,8 +175,6 @@ bool dump_keys()
         return false;
     }
 
-    //TPRINTFARGS("%kTSEC key(s)...  ", colors[(color_idx++) % 6]);
-
     // Master key derivation
     if (pkg1_id->kb == KB_FIRMWARE_VERSION_620 && _key_exists(tsec_keys + 0x10))
     {
@@ -232,8 +224,6 @@ bool dump_keys()
         se_aes_crypt_block_ecb(7, 0, master_key[i], master_key_source);
     }
     free(keyblob_block);
-
-    //TPRINTFARGS("%kMaster keys...  ", colors[(color_idx++) % 6]);
 
     u32 key_generation = 0;
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_500)
@@ -286,22 +276,23 @@ bool dump_keys()
 
     gfx_printf("%kGot keys!\n", COLOR_GREEN);
     char serial[15];
-    readData((u8 *)serial, 0x250, 15, ENCRYPTED);
+    readData((u8 *)serial, 0x250, 15, ENCRYPTED, NULL);
 
     gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
 
     return true;
 }
 
-void erase(u32 offset, u32 length)
+bool erase(u32 offset, u32 length)
 {
 
     u8 *tmp = (u8 *)calloc(length, sizeof(u8));
-    writeData(tmp, offset, length, ENCRYPTED);
+    bool result = writeData(tmp, offset, length, ENCRYPTED, NULL);
     free(tmp);
+    return result;
 }
 
-void writeSerial()
+bool writeSerial()
 {
     const char *junkSerial;
     if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
@@ -313,39 +304,62 @@ void writeSerial()
         junkSerial = "XAW00000000001";
     }
 
-    writeData((u8 *)junkSerial, 0x250, 14, ENCRYPTED);
+    return writeData((u8 *)junkSerial, 0x250, 14, ENCRYPTED, NULL);
 }
 
-void incognito()
+bool incognito()
 {
+    gfx_printf("%kChecking if backup exists...\n", COLOR_YELLOW);
+    if (!checkBackupExists())
+    {
+        gfx_printf("%kI'm sorry Dave, I'm afraid I can't do that...\n%kWill make a backup first...\n", COLOR_RED, COLOR_YELLOW);
+        if (!backupProdinfo())
+            return false;
+    }
 
     gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
-
-    writeSerial();
+    if (!writeSerial())
+        return false;
+    ;
     gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
-    erase(0x0AE0, 0x800); // client cert
+    if (!erase(0x0AE0, 0x800)) // client cert
+        return false;
+    ;
     gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
-    erase(0x3AE0, 0x130); // private key
+    if (!erase(0x3AE0, 0x130)) // private key
+        return false;
+    ;
     gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
-    erase(0x35E1, 0x006); // deviceId
+    if (!erase(0x35E1, 0x006)) // deviceId
+        return false;
+    ;
     gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
-    erase(0x36E1, 0x006); // deviceId
+    if (!erase(0x36E1, 0x006)) // deviceId
+        return false;
+    ;
     gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
-    erase(0x02B0, 0x180); // device cert
+    if (!erase(0x02B0, 0x180)) // device cert
+        return false;
+    ;
     gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
-    erase(0x3D70, 0x240); // device cert
+    if (!erase(0x3D70, 0x240)) // device cert
+        return false;
+    ;
     gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
-
-    erase(0x3FC0, 0x240); // device key
-
+    if (!erase(0x3FC0, 0x240)) // device key
+        return false;
+    ;
     gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
-
-    writeClientCertHash();
+    if (!writeClientCertHash())
+        return false;
+    ;
     gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
-
-    writeCal0Hash();
+    if (!writeCal0Hash())
+        return false;
+    ;
 
     gfx_printf("\n%kIncognito done!\n\n", COLOR_GREEN);
+    return true;
 }
 
 u32 divideCeil(u32 x, u32 y)
@@ -358,7 +372,7 @@ void cleanUp()
 
     h_cfg.emummc_force_disable = emummc_load_cfg();
     //nx_emmc_gpt_free(&gpt);
-    //   emummc_storage_end(&storage);
+    //emummc_storage_end(&storage);
 }
 
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed)
@@ -381,14 +395,18 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset)
            (*(u8 *)(buffer + offset + 3) << 0x18);
 }
 
-bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
+bool readData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32))
 {
+
+    if (progress_callback != NULL)
+    {
+        (*progress_callback)(0, length);
+    }
     bool result = false;
     u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
-    u32 sectorCount = divideCeil(newOffset + length - 1, NX_EMMC_BLOCKSIZE) + 1;
-    //u32 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
+    u32 sectorCount = divideCeil(newOffset + length, NX_EMMC_BLOCKSIZE);
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
@@ -399,30 +417,43 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
         if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
             goto out;
-        
+
         sector += sectorsToRead;
         sectorCount -= sectorsToRead;
         clusterOffset = 0;
         sectorOffset += sectorsToRead;
+        if (progress_callback != NULL)
+        {
+            (*progress_callback)(sectorOffset * NX_EMMC_BLOCKSIZE, length);
+        }
     }
     if (sectorCount == 0)
         goto done;
 
     if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
         goto out;
-    
 
     memcpy(buffer, tmp + newOffset, length);
 done:
     result = true;
+    if (progress_callback != NULL)
+    {
+        (*progress_callback)(length, length);
+    }
 out:
     free(tmp);
     return result;
 }
 
-bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
+bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc, void (*progress_callback)(u32, u32))
 {
+    if (progress_callback != NULL)
+    {
+        (*progress_callback)(0, length);
+    }
     bool result = false;
+
+    u32 initialLength = length;
 
     u8 *tmp_sec = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
     u8 *tmp = NULL;
@@ -433,49 +464,58 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
     // if there is a sector offset, read involved sector, write data to it with offset and write back whole sector to be sector aligned
     if (newOffset > 0)
     {
-
-        u32 bytesToRead;
-        if (length > NX_EMMC_BLOCKSIZE)
+        u32 bytesToRead = NX_EMMC_BLOCKSIZE - newOffset;
+        u32 bytesToWrite;
+        if (length >= bytesToRead)
         {
-            bytesToRead = NX_EMMC_BLOCKSIZE - newOffset;
+            bytesToWrite = bytesToRead;
         }
         else
         {
-            bytesToRead = length - newOffset;
+            bytesToWrite = length;
         }
         if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
             goto out;
-        
-        memcpy(tmp_sec + newOffset, buffer, bytesToRead);
+
+        memcpy(tmp_sec + newOffset, buffer, bytesToWrite);
         if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
             goto out;
-        
-        sector++;
-        length -= bytesToRead;
-        newOffset = bytesToRead;
 
+        sector++;
+        length -= bytesToWrite;
+        newOffset = bytesToWrite;
+
+        if (progress_callback != NULL)
+        {
+            (*progress_callback)(initialLength - length, initialLength);
+        }
         // are we done?
         if (length == 0)
             goto done;
     }
 
     // write whole sectors in chunks while being cluster aligned
-    u32 sectorCount = (length - 1 / NX_EMMC_BLOCKSIZE) + 1;
+    u32 sectorCount = ((length - 1) / NX_EMMC_BLOCKSIZE);
     tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
     u32 clusterOffset = sector % SECTORS_IN_CLUSTER;
     u32 sectorOffset = 0;
-    while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
+    while (clusterOffset + sectorCount >= SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
         if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
             goto out;
-        
+
         sector += sectorsToRead;
         sectorOffset += sectorsToRead;
         sectorCount -= sectorsToRead;
         clusterOffset = 0;
         length -= sectorsToRead * NX_EMMC_BLOCKSIZE;
+
+        if (progress_callback != NULL)
+        {
+            (*progress_callback)(initialLength - length, initialLength);
+        }
     }
 
     // write remaining sectors
@@ -483,98 +523,100 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
     {
         if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
             goto out;
-        
+
         length -= sectorCount * NX_EMMC_BLOCKSIZE;
         sector += sectorCount;
         sectorOffset += sectorCount;
+
+        if (progress_callback != NULL)
+        {
+            (*progress_callback)(initialLength - length, initialLength);
+        }
     }
 
     // if there is data remaining that is smaller than a sector, read that sector, write remaining data to it and write back whole sector
     if (length == 0)
         goto done;
-    if (length >= NX_EMMC_BLOCKSIZE)
+
+    if (length > NX_EMMC_BLOCKSIZE)
     {
-        gfx_printf("\n%kERROR, ERROR!! remaining length: %d\n", COLOR_RED, length);
+        gfx_printf("%kERROR, ERRO! Length is %d!\n", COLOR_RED, length);
         goto out;
     }
+
     if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
         goto out;
-    
-    memcpy(tmp, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
+
+    memcpy(tmp_sec, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
     if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
         goto out;
 
 done:
     result = true;
+    if (progress_callback != NULL)
+    {
+        (*progress_callback)(initialLength, initialLength);
+    }
 out:
     free(tmp_sec);
     free(tmp);
     return result;
-
-    // u32 sector = (offset / NX_EMMC_BLOCKSIZE);
-    // u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
-
-    // u8 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
-
-    // u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
-
-    // disk_read_prod(tmp, sector, sectorCount, 1);
-
-    // memcpy(tmp + newOffset, buffer, length);
-
-    // disk_write_prod(tmp, sector, sectorCount, enc);
-
-    // free(tmp);
-
-    // return true;
 }
 
 bool writeHash(u32 hashOffset, u32 offset, u32 sz)
 {
-
+    bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    readData(buffer, offset, sz, ENCRYPTED);
+    if (!readData(buffer, offset, sz, ENCRYPTED, NULL))
+    {
+        goto out;
+    }
     u8 hash[0x20];
     se_calc_sha256(hash, buffer, sz);
 
-    writeData(hash, hashOffset, 0x20, ENCRYPTED);
-
+    if (!writeData(hash, hashOffset, 0x20, ENCRYPTED, NULL))
+    {
+        goto out;
+    }
+    result = true;
+out:
     free(buffer);
-    return true;
+    return result;
 }
 
-void test(){
-    u32 size = 262144;
-    gfx_printf("%kTest reading %s bytes\n", COLOR_ORANGE, size);
-    u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    u8* bigBuffer = (u8 *)malloc(size);
-    u32 offset = 0;
-    readData(bigBuffer, 0, size, ENCRYPTED);
-    while(size > NX_EMMC_BLOCKSIZE){
-        readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-        if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
-            gfx_printf("arry mismatch on offset %d", offset);
+void test()
+{
+    // u32 size = 262144;
+    // gfx_printf("%kTest reading %d bytes\n", COLOR_ORANGE, size);
+    // u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
+    // u8* bigBuffer = (u8 *)malloc(size);
+    // u32 offset = 0;
+    // readData(bigBuffer, 0, size, ENCRYPTED);
+    // while(size > NX_EMMC_BLOCKSIZE){
+    //     readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
+    //     if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
+    //         gfx_printf("arry mismatch on offset %d", offset);
 
-        }
-        size -= NX_EMMC_BLOCKSIZE;
-        offset += NX_EMMC_BLOCKSIZE;
-    }
-    free(buffer);
-    free(bigBuffer);
-    gfx_printf("%Reading Done!\n", COLOR_ORANGE, size);
+    //     }
+    //     size -= NX_EMMC_BLOCKSIZE;
+    //     offset += NX_EMMC_BLOCKSIZE;
+    // }
+    // free(buffer);
+    // free(bigBuffer);
+    // gfx_printf("%Reading Done!\n", COLOR_ORANGE, size);
 }
 
 bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    readData(buffer, offset, sz, ENCRYPTED);
+    readData(buffer, offset, sz, ENCRYPTED, NULL);
     u8 hash1[0x20];
     se_calc_sha256(hash1, buffer, sz);
 
     u8 hash2[0x20];
 
-    readData(hash2, hashOffset, 0x20, ENCRYPTED);
+    readData(hash2, hashOffset, 0x20, ENCRYPTED, NULL);
 
     if (memcmp(hash1, hash2, 0x20))
     {
@@ -594,14 +636,14 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 u32 certSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), ENCRYPTED);
+    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), ENCRYPTED, NULL);
     return buffer;
 }
 
 u32 calibrationDataSize()
 {
     u32 buffer;
-    readData((u8 *)&buffer, 0x08, sizeof(buffer), ENCRYPTED);
+    readData((u8 *)&buffer, 0x08, sizeof(buffer), ENCRYPTED, NULL);
     return buffer;
 }
 
@@ -634,7 +676,7 @@ bool verifyProdinfo()
     if (verifyClientCertHash() && verifyCal0Hash())
     {
         char serial[15];
-        readData((u8 *)serial, 0x250, 15, ENCRYPTED);
+        readData((u8 *)serial, 0x250, 15, ENCRYPTED, NULL);
         gfx_printf("%kVerification successful!\n%kNew Serial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
         return true;
     }
@@ -642,8 +684,14 @@ bool verifyProdinfo()
     return false;
 }
 
-void print_progress(size_t count, size_t max)
+void print_progress(u32 count, u32 max)
 {
+    u32 cur_x = gfx_con.x;
+    u32 cur_y = gfx_con.y;
+
+    const u8 width = 20;
+    count = (int)((count * 100 / (float)max) / (100 / width));
+    max = width;
     const char prefix[] = "Progress: [";
     const char suffix[] = "]";
     const size_t prefix_length = sizeof(prefix) - 1;
@@ -660,9 +708,12 @@ void print_progress(size_t count, size_t max)
     strcpy(&buffer[prefix_length + i], suffix);
     gfx_printf("%k%s %d%%\n", COLOR_BLUE, buffer, (100 / max) * count);
     free(buffer);
+    gfx_con.x = cur_x;
+    gfx_con.y = cur_y;
 }
 
-bool getLastBackup(){
+bool getLastBackup()
+{
     DIR dir;
     //char* path = "sd:/incognito";
     char path[255];
@@ -670,151 +721,146 @@ bool getLastBackup(){
     FILINFO fno;
     FRESULT res;
 
-    res = f_opendir(&dir, path);                       /* Open the directory */
-    if (res == FR_OK) {
-        for (;;) {
-            res = f_readdir(&dir, &fno);                   /* Read a directory item */
-            if (res != FR_OK || fno.fname[0] == 0) break;  /* Break on error or end of dir */
-            if ((fno.fattrib & AM_DIR) == 0) {                    /* It is not a directory */
-                 gfx_printf("%s/%s\n", path, fno.fname);
+    res = f_opendir(&dir, path); /* Open the directory */
+    if (res == FR_OK)
+    {
+        for (;;)
+        {
+            res = f_readdir(&dir, &fno); /* Read a directory item */
+            if (res != FR_OK || fno.fname[0] == 0)
+                break; /* Break on error or end of dir */
+            if ((fno.fattrib & AM_DIR) == 0)
+            { /* It is not a directory */
+                gfx_printf("%s/%s\n", path, fno.fname);
             }
         }
         f_closedir(&dir);
     }
 
     return res;
-
-
 }
 
-bool backupProdinfo()
+bool checkBackupExists()
 {
     char *name;
     if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
     {
-        name = "sd:/prodinfo_sysnand.bin";
+        name = BACKUP_NAME_SYSNAND;
     }
     else
     {
+        name = BACKUP_NAME_EMUNAND;
+    }
+    return f_stat(name, NULL) == FR_OK;
+}
 
-        name = "sd:/prodinfo_emunand.bin";
+bool backupProdinfo()
+{
+    bool result = false;
+    char *name;
+    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    {
+        name = BACKUP_NAME_SYSNAND;
+    }
+    else
+    {
+        name = BACKUP_NAME_EMUNAND;
     }
 
     gfx_printf("%kBacking up %s...\n", COLOR_YELLOW, name);
-
-    if (f_stat(name, NULL))
+    if (checkBackupExists())
     {
-        f_unlink(name);
-    }
-    FIL fp;
-    f_open(&fp, name, FA_CREATE_ALWAYS | FA_WRITE);
-    u8 *bufferNX = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    u32 size = PRODINFO_SIZE;
-
-    u8 percentDone = 0;
-    u32 offset = 0;
-    const u8 step = 5;
-
-    u32 iterations = size / NX_EMMC_BLOCKSIZE;
-    u32 printCount = iterations / (100 / step);
-
-    u32 x = gfx_con.x;
-    u32 y = gfx_con.y;
-
-    while (size > NX_EMMC_BLOCKSIZE)
-    {
-        readData(bufferNX, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-        f_write(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
-        f_sync(&fp);
-
-        offset += NX_EMMC_BLOCKSIZE;
-        size -= NX_EMMC_BLOCKSIZE;
-        if (iterations % printCount == 0)
+        gfx_printf("%kBackup already exists!\nWill rename old backup.\n", COLOR_YELLOW);
+        u32 filenameSuffix = 0;
+        char newName[255];
+        do
         {
-            print_progress(percentDone / step, 100 / step);
-            gfx_con.x = x;
-            gfx_con.y = y;
-            percentDone += step;
-        }
-        iterations--;
+            sprintf(newName, "%s.%d", name, filenameSuffix);
+            filenameSuffix++;
+        } while (f_stat(newName, NULL) == FR_OK);
+        f_rename(name, newName);
+        gfx_printf("%kOld backup renamed to %s\n", COLOR_YELLOW, newName);
     }
-    if (size > 0)
+
+    FIL fp;
+    if (f_open(&fp, name, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
     {
-        readData(bufferNX, offset, size, ENCRYPTED);
-        f_write(&fp, bufferNX, size, NULL);
-        f_sync(&fp);
+        gfx_printf("\n%kCannot write to %s!\n", COLOR_RED, name);
+        return false;
     }
 
-    print_progress(100 / step, 100 / step);
+    u8 *bufferNX = (u8 *)malloc(PRODINFO_SIZE);
+    gfx_printf("%kReading from NAND...\n", COLOR_YELLOW);
+    if (!readData(bufferNX, 0, PRODINFO_SIZE, ENCRYPTED, print_progress))
+    {
+        gfx_printf("\n%kError reading from NAND!\n", COLOR_RED);
+        goto out;
+    }
+    gfx_printf("%k\nWriting to file...\n", COLOR_YELLOW);
+    u32 bytesWritten;
+    if (f_write(&fp, bufferNX, PRODINFO_SIZE, &bytesWritten) != FR_OK || bytesWritten != PRODINFO_SIZE)
+    {
+        gfx_printf("\n%kError writing to file!\nPlease try again. If this doesn't work, you don't have a working backup!\n", COLOR_RED);
+        goto out;
+    }
+    f_sync(&fp);
 
+    result = true;
+    gfx_printf("\n%kBackup to %s done!\n\n", COLOR_GREEN, name);
+
+out:
     f_close(&fp);
     free(bufferNX);
-    gfx_printf("%k\nBackup %s done!\n\n", COLOR_GREEN, name);
 
-    return true;
+    return result;
 }
 
 bool restoreProdinfo()
 {
+    bool result = false;
     sd_mount();
 
     char *name;
     if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
     {
-        name = "sd:/prodinfo_sysnand.bin";
+        name = BACKUP_NAME_SYSNAND;
     }
     else
     {
-
-        name = "sd:/prodinfo_emunand.bin";
+        name = BACKUP_NAME_EMUNAND;
     }
 
-    gfx_printf("%kRestoring %s...\n", COLOR_YELLOW, name);
+    gfx_printf("%kRestoring from %s...\n", COLOR_YELLOW, name);
 
     FIL fp;
     if (f_open(&fp, name, FA_READ) != FR_OK)
     {
-        gfx_printf("\nCannot open%s!\n", name);
+        gfx_printf("\n%kCannot open %s!\n", COLOR_RED, name);
         return false;
     }
-    u8 bufferNX[NX_EMMC_BLOCKSIZE];
 
-    u32 size = PRODINFO_SIZE;
-
-    u8 percentDone = 0;
-    u32 offset = 0;
-    const u8 step = 5;
-
-    u32 iterations = size / NX_EMMC_BLOCKSIZE;
-    u32 printCount = iterations / (100 / step);
-
-    u32 x = gfx_con.x;
-    u32 y = gfx_con.y;
-
-    while (size > NX_EMMC_BLOCKSIZE)
+    u8 *bufferNX = (u8 *)malloc(PRODINFO_SIZE);
+    u32 bytesRead;
+    gfx_printf("%kReading from file...\n", COLOR_YELLOW);
+    if (f_read(&fp, bufferNX, PRODINFO_SIZE, &bytesRead) != FR_OK || bytesRead != PRODINFO_SIZE)
     {
-        f_read(&fp, bufferNX, NX_EMMC_BLOCKSIZE, NULL);
-        writeData(bufferNX, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-        offset += NX_EMMC_BLOCKSIZE;
-        size -= NX_EMMC_BLOCKSIZE;
-        if (iterations % printCount == 0)
-        {
-            print_progress(percentDone / step, 100 / step);
-            gfx_con.x = x;
-            gfx_con.y = y;
-            percentDone += step;
-        }
-        iterations--;
+        gfx_printf("\n%kError reading from file!\n", COLOR_RED);
+        goto out;
     }
-    if (size > 0)
+    gfx_printf("%kWriting to NAND...\n", COLOR_YELLOW);
+    if (!writeData(bufferNX, 0, PRODINFO_SIZE, ENCRYPTED, print_progress))
     {
-        f_read(&fp, bufferNX, size, NULL);
-        writeData(bufferNX, offset, size, ENCRYPTED);
+        gfx_printf("\n%kError writing to NAND!\nThis is bad. Try again, because your switch probably won't boot.\n"
+                   "If you see this error again, you should restore via NAND backup in hekate.\n",
+                   COLOR_RED);
+        goto out;
     }
-    print_progress(100 / step, 100 / step);
 
+    result = true;
+    gfx_printf("\n%kRestore from %s done!\n\n", COLOR_GREEN, name);
+out:
     f_close(&fp);
+    free(bufferNX);
 
-    gfx_printf("%kRestore %s done!\n\n", COLOR_GREEN, name);
-    return true;
+    return result;
 }

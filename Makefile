@@ -15,7 +15,7 @@ LPVERSION_BUGFX := 2
 
 ################################################################################
 
-TARGET := Incognito_RCM
+TARGET := Incognito_RCM_new
 BUILDDIR := build
 OUTPUTDIR := output
 SOURCEDIR = source

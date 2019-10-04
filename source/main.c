@@ -155,15 +155,18 @@ void incognito_sysnand()
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
+        goto out;
+    if (!incognito())
     {
-        cleanUp();
-        return;
+        gfx_printf("%kError applying Incognito!\nWill restore backup!\n", COLOR_RED);
+        backupProdinfo();
     }
-    //incognito();
-    test();
-    verifyProdinfo();
+    if (!verifyProdinfo())
+    {
+        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+    }
+out:
     cleanUp();
-
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
 }
@@ -175,13 +178,17 @@ void incognito_emunand()
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
+        goto out;
+    if (!incognito())
     {
-        cleanUp();
-        return;
+        gfx_printf("%kError applying Incognito!\nWill restore backup!\n", COLOR_RED);
+        backupProdinfo();
     }
-    test();
-    //incognito();
-    verifyProdinfo();
+    if (!verifyProdinfo())
+    {
+        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+    }
+out:
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
@@ -192,11 +199,10 @@ void backup_sysnand()
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
-    {
-        cleanUp();
-        return;
-    }
+        goto out;
+
     backupProdinfo();
+out:
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
@@ -209,12 +215,10 @@ void backup_emunand()
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
-    {
-        cleanUp();
-        return;
-    }
+        goto out;
 
     backupProdinfo();
+out:
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
@@ -225,13 +229,14 @@ void restore_sysnand()
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
-    {
-        cleanUp();
-        return;
-    }
+        goto out;
 
     restoreProdinfo();
-    verifyProdinfo();
+    if (!verifyProdinfo())
+    {
+        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+    }
+out:
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
@@ -243,19 +248,20 @@ void restore_emunand()
         return;
     emu_cfg.enabled = 1;
     b_cfg.extra_cfg |= EXTRA_CFG_DUMP_EMUMMC;
-
     if (!dump_keys())
-    {
-        cleanUp();
-        return;
-    }
+        goto out;
 
     restoreProdinfo();
-    verifyProdinfo();
+    if (!verifyProdinfo())
+    {
+        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+    }
+out:
     cleanUp();
     gfx_printf("\n%k---------------\n%kPress any key to return to the main menu.", COLOR_YELLOW, COLOR_ORANGE);
     btn_wait();
 }
+
 ment_t ment_top[] = {
     MDEF_HANDLER("Backup (SysNAND)", backup_sysnand, COLOR_ORANGE),
     MDEF_HANDLER("Backup (emuMMC)", backup_emunand, COLOR_ORANGE),

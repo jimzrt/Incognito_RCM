@@ -61,6 +61,7 @@ u32 start_time, end_time;
 
 #define ENCRYPTED 1
 #define DECRYPTED 0
+#define SECTORS_IN_CLUSTER 32
 
 #define TPRINTF(text)                                           \
     end_time = get_tmr_us();                                    \
@@ -357,6 +358,11 @@ void incognito()
     gfx_printf("\n%kIncognito done!\n\n", COLOR_GREEN);
 }
 
+u32 divideCeil(u32 x, u32 y)
+{
+    return 1 + ((x - 1) / y);
+}
+
 void cleanUp()
 {
 
@@ -426,15 +432,16 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
     u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
-    u32 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
+    u32 sectorCount = divideCeil(newOffset + length - 1, NX_EMMC_BLOCKSIZE) + 1;
+    //u32 sectorCount = ((newOffset + length - 1) / (NX_EMMC_BLOCKSIZE)) + 1;
 
     u8 *tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
-    u32 clusterOffset = sector % 32;
+    u32 clusterOffset = sector % SECTORS_IN_CLUSTER;
     u32 sectorOffset = 0;
-    while (clusterOffset + sectorCount > 32)
+    while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
     {
-        u32 sectorToRead = 32 - clusterOffset;
+        u32 sectorToRead = SECTORS_IN_CLUSTER - clusterOffset;
         disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorToRead, enc);
         sector += sectorToRead;
         sectorCount -= sectorToRead;

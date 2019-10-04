@@ -319,43 +319,43 @@ bool incognito()
     gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-    ;
+    
     gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
     if (!erase(0x0AE0, 0x800)) // client cert
         return false;
-    ;
+    
     gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
     if (!erase(0x3AE0, 0x130)) // private key
         return false;
-    ;
+    
     gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
     if (!erase(0x35E1, 0x006)) // deviceId
         return false;
-    ;
+    
     gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
     if (!erase(0x36E1, 0x006)) // deviceId
         return false;
-    ;
+    
     gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
     if (!erase(0x02B0, 0x180)) // device cert
         return false;
-    ;
+    
     gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
     if (!erase(0x3D70, 0x240)) // device cert
         return false;
-    ;
+    
     gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
     if (!erase(0x3FC0, 0x240)) // device key
         return false;
-    ;
+    
     gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
     if (!writeClientCertHash())
         return false;
-    ;
+    
     gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
     if (!writeCal0Hash())
         return false;
-    ;
+    
 
     gfx_printf("\n%kIncognito done!\n\n", COLOR_GREEN);
     return true;
@@ -494,7 +494,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
     }
 
     // write whole sectors in chunks while being cluster aligned
-    u32 sectorCount = ((length - 1) / NX_EMMC_BLOCKSIZE);
+    u32 sectorCount = length / NX_EMMC_BLOCKSIZE;
     tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
 
     u32 clusterOffset = sector % SECTORS_IN_CLUSTER;
@@ -609,25 +609,26 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    readData(buffer, offset, sz, NULL);
+    if(!readData(buffer, offset, sz, NULL))
+        goto out;
     u8 hash1[0x20];
     se_calc_sha256(hash1, buffer, sz);
 
     u8 hash2[0x20];
 
-    readData(hash2, hashOffset, 0x20, NULL);
+    if(!readData(hash2, hashOffset, 0x20, NULL))
+        goto out;
 
     if (memcmp(hash1, hash2, 0x20))
     {
         EPRINTF("error: hash verification failed\n");
         gfx_hexdump(0, hash1, 0x20);
         gfx_hexdump(0, hash2, 0x20);
-    }
-    else
-    {
-        result = true;
+        goto out;
     }
 
+    result = true;
+out:
     free(buffer);
     return result;
 }

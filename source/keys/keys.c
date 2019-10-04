@@ -36,7 +36,6 @@
 #include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
 #include "../storage/sdmmc.h"
-#include "../utils/btn.h"
 #include "../utils/list.h"
 #include "../utils/sprintf.h"
 #include "../utils/util.h"
@@ -63,16 +62,6 @@ u32 start_time, end_time;
 #define DECRYPTED 0
 #define SECTORS_IN_CLUSTER 32
 
-#define TPRINTF(text)                                           \
-    end_time = get_tmr_us();                                    \
-    gfx_printf(text " done in %d us\n", end_time - start_time); \
-    start_time = get_tmr_us()
-#define TPRINTFARGS(text, args...)                                    \
-    end_time = get_tmr_us();                                          \
-    gfx_printf(text " done in %d us\n", args, end_time - start_time); \
-    start_time = get_tmr_us()
-#define SAVE_KEY(name, src, len) _save_key(name, src, len, text_buffer)
-#define SAVE_KEY_FAMILY(name, src, count, len) _save_key_family(name, src, count, len, text_buffer)
 
 static u8 temp_key[0x10],
     bis_key[4][0x20] = {0},

@@ -408,20 +408,19 @@ bool readData(u8 *buffer, u32 offset, u32 length, u8 enc)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
         if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
-        {
             goto out;
-        }
+        
         sector += sectorsToRead;
         sectorCount -= sectorsToRead;
         clusterOffset = 0;
         sectorOffset += sectorsToRead;
     }
-    if(sectorCount == 0) goto done;
+    if (sectorCount == 0)
+        goto done;
 
     if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
-    {
         goto out;
-    }
+    
 
     memcpy(buffer, tmp + newOffset, length);
 done:
@@ -442,29 +441,34 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
     u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);
 
     // if there is a sector offset, read involved sector, write data to it with offset and write back whole sector to be sector aligned
-    if(newOffset > 0){
-        
+    if (newOffset > 0)
+    {
+
         u32 bytesToRead;
-        if(length  > NX_EMMC_BLOCKSIZE){
+        if (length > NX_EMMC_BLOCKSIZE)
+        {
             bytesToRead = NX_EMMC_BLOCKSIZE - newOffset;
-        } else {
+        }
+        else
+        {
             bytesToRead = length - newOffset;
         }
-        if(disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK){
-            goto out; 
-        }
-        memcpy(tmp_sec + newOffset, buffer, bytesToRead);
-        if(disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK){
+        if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
             goto out;
-        }
+        
+        memcpy(tmp_sec + newOffset, buffer, bytesToRead);
+        if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
+            goto out;
+        
         sector++;
         length -= bytesToRead;
         newOffset = bytesToRead;
 
         // are we done?
-        if(length == 0) goto done;
+        if (length == 0)
+            goto done;
     }
-    
+
     // write whole sectors in chunks while being cluster aligned
     u32 sectorCount = (length - 1 / NX_EMMC_BLOCKSIZE) + 1;
     tmp = (u8 *)malloc(sectorCount * NX_EMMC_BLOCKSIZE);
@@ -474,9 +478,9 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
     while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if(disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK){
+        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead, enc) != RES_OK)
             goto out;
-        }
+        
         sector += sectorsToRead;
         sectorOffset += sectorsToRead;
         sectorCount -= sectorsToRead;
@@ -485,37 +489,37 @@ bool writeData(u8 *buffer, u32 offset, u32 length, u8 enc)
     }
 
     // write remaining sectors
-    if(sectorCount > 0){
-        if(disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK){
+    if (sectorCount > 0)
+    {
+        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount, enc) != RES_OK)
             goto out;
-        }
+        
         length -= sectorCount * NX_EMMC_BLOCKSIZE;
         sector += sectorCount;
         sectorOffset += sectorCount;
     }
-    
-    // if there is data remaining that is smaller than a sector, read that sector, write remaining data to it and write back whole sector 
-    if(length == 0) goto done;
-    if(length >= NX_EMMC_BLOCKSIZE){
+
+    // if there is data remaining that is smaller than a sector, read that sector, write remaining data to it and write back whole sector
+    if (length == 0)
+        goto done;
+    if (length >= NX_EMMC_BLOCKSIZE)
+    {
         gfx_printf("\n%kERROR, ERROR!! remaining length: %d\n", COLOR_RED, length);
         goto out;
     }
-    if(disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK){
+    if (disk_read_prod(tmp_sec, sector, 1, enc) != RES_OK)
         goto out;
-    }
+    
     memcpy(tmp, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
-    if(disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK){
+    if (disk_write_prod(tmp_sec, sector, 1, enc) != RES_OK)
         goto out;
-    }
 
-
-done:   
+done:
     result = true;
 out:
     free(tmp_sec);
     free(tmp);
     return result;
-
 
     // u32 sector = (offset / NX_EMMC_BLOCKSIZE);
     // u32 newOffset = (offset % NX_EMMC_BLOCKSIZE);

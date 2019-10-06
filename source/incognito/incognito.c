@@ -14,7 +14,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "keys.h"
+#include "incognito.h"
 
 #include "../config/config.h"
 #include "../gfx/di.h"
@@ -42,7 +42,7 @@
 
 #include "key_sources.inl"
 
-#include "../libs/fatfs/diskio.h"
+#include "io/io.h"
 #include <string.h>
 
 extern bool sd_mount();
@@ -423,7 +423,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32,
     while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead) != RES_OK)
+        if (!prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead))
             goto out;
 
         sector += sectorsToRead;
@@ -438,7 +438,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32,
     if (sectorCount == 0)
         goto done;
 
-    if (disk_read_prod(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount) != RES_OK)
+    if (!prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount))
         goto out;
 
     memcpy(buffer, tmp + newOffset, length);
@@ -482,11 +482,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
         {
             bytesToWrite = length;
         }
-        if (disk_read_prod(tmp_sec, sector, 1) != RES_OK)
+        if (!prodinfo_read(tmp_sec, sector, 1))
             goto out;
 
         memcpy(tmp_sec + newOffset, buffer, bytesToWrite);
-        if (disk_write_prod(tmp_sec, sector, 1) != RES_OK)
+        if (!prodinfo_write(tmp_sec, sector, 1))
             goto out;
 
         sector++;
@@ -511,7 +511,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
     while (clusterOffset + sectorCount >= SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead) != RES_OK)
+        if (!prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead))
             goto out;
 
         sector += sectorsToRead;
@@ -529,7 +529,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
     // write remaining sectors
     if (sectorCount > 0)
     {
-        if (disk_write_prod(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount) != RES_OK)
+        if (!prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount))
             goto out;
 
         length -= sectorCount * NX_EMMC_BLOCKSIZE;
@@ -552,11 +552,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
         goto out;
     }
 
-    if (disk_read_prod(tmp_sec, sector, 1) != RES_OK)
+    if (!prodinfo_read(tmp_sec, sector, 1))
         goto out;
 
     memcpy(tmp_sec, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
-    if (disk_write_prod(tmp_sec, sector, 1) != RES_OK)
+    if (!prodinfo_write(tmp_sec, sector, 1))
         goto out;
 
 done:

@@ -10,8 +10,6 @@ extern "C" {
 #endif
 
 #include "../../utils/types.h"
-#include "../../storage/sdmmc.h"
-#include "../../storage/nx_emmc.h"
 
 /* Status of Disk Functions */
 typedef BYTE	DSTATUS;
@@ -33,8 +31,6 @@ typedef enum {
 DSTATUS disk_initialize (BYTE pdrv);
 DSTATUS disk_status (BYTE pdrv);
 DRESULT disk_read (BYTE pdrv, BYTE* buff, DWORD sector, UINT count);
-DRESULT disk_read_prod (BYTE *buff, DWORD sector, UINT count);
-DRESULT disk_write_prod (BYTE *buff, DWORD sector, UINT count);
 DRESULT disk_write (BYTE pdrv, const BYTE* buff, DWORD sector, UINT count);
 DRESULT disk_ioctl (BYTE pdrv, BYTE cmd, void* buff);
 

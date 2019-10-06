@@ -24,52 +24,51 @@
 /*-----------------------------------------------------------------------*/
 
 #include <string.h>
-#include "diskio.h" /* FatFs lower layer API */
+#include "diskio.h"		/* FatFs lower layer API */
 #include "../../mem/heap.h"
 #include "../../sec/se.h"
+#include "../../storage/nx_emmc.h"
+#include "../../storage/sdmmc.h"
 
 #define SDMMC_UPPER_BUFFER 0xB8000000
-#define DRAM_START 0x80000000
+#define DRAM_START         0x80000000
 
 extern sdmmc_storage_t sd_storage;
 extern sdmmc_storage_t storage;
 extern emmc_part_t *system_part;
-extern emmc_part_t *prodinfo_part;
 
-typedef struct
-{
+typedef struct {
     u32 sector;
     u32 visit_count;
-    u8 tweak[0x10];
-    u8 cached_sector[0x200];
-    u8 align[8];
+    u8  tweak[0x10];
+    u8  cached_sector[0x200];
+    u8  align[8];
 } sector_cache_t;
 
 #define MAX_SEC_CACHE_ENTRIES 64
-static sector_cache_t *sector_cache = (sector_cache_t *)0x40022000;
+static sector_cache_t *sector_cache = NULL;
 static u32 secindex = 0;
+bool clear_sector_cache = false;
 
-DSTATUS disk_status(
+DSTATUS disk_status (
     BYTE pdrv /* Physical drive number to identify the drive */
 )
 {
     return 0;
 }
 
-DSTATUS disk_initialize(
+DSTATUS disk_initialize (
     BYTE pdrv /* Physical drive number to identify the drive */
 )
 {
     return 0;
 }
 
-static inline void _gf256_mul_x_le(void *block)
-{
+static inline void _gf256_mul_x_le(void *block) {
     u8 *pdata = (u8 *)block;
     u32 carry = 0;
 
-    for (u32 i = 0; i < 0x10; i++)
-    {
+    for (u32 i = 0; i < 0x10; i++) {
         u8 b = pdata[i];
         pdata[i] = (b << 1) | carry;
         carry = b >> 7;
@@ -79,16 +78,13 @@ static inline void _gf256_mul_x_le(void *block)
         pdata[0x0] ^= 0x87;
 }
 
-static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u64 sec, void *dst, void *src, u32 secsize)
-{
+static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u64 sec, void *dst, void *src, u32 secsize) {
     int res = 0;
     u8 *pdst = (u8 *)dst;
     u8 *psrc = (u8 *)src;
 
-    if (regen_tweak)
-    {
-        for (int i = 0xF; i >= 0; i--)
-        {
+    if (regen_tweak) {
+        for (int i = 0xF; i >= 0; i--) {
             tweak[i] = sec & 0xFF;
             sec >>= 8;
         }
@@ -103,8 +99,7 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
     memcpy(temptweak, tweak, 0x10);
 
     //We are assuming a 0x10-aligned sector size in this implementation.
-    for (u32 i = 0; i < secsize / 0x10; i++)
-    {
+    for (u32 i = 0; i < secsize / 0x10; i++) {
         for (u32 j = 0; j < 0x10; j++)
             pdst[j] = psrc[j] ^ tweak[j];
         _gf256_mul_x_le(tweak);
@@ -112,18 +107,18 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
         pdst += 0x10;
     }
 
-    se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
+    se_aes_crypt_ecb(ks2, 0, dst, secsize, src, secsize);
 
     pdst = (u8 *)dst;
 
     memcpy(tweak, temptweak, 0x10);
-    for (u32 i = 0; i < secsize / 0x10; i++)
-    {
+    for (u32 i = 0; i < secsize / 0x10; i++) {
         for (u32 j = 0; j < 0x10; j++)
             pdst[j] = pdst[j] ^ tweak[j];
         _gf256_mul_x_le(tweak);
         pdst += 0x10;
     }
+
 
     res = 1;
 
@@ -131,113 +126,44 @@ out:;
     return res;
 }
 
-DRESULT disk_read_prod(
-
-    BYTE *buff,   /* Data buffer to store read data */
-    DWORD sector, /* Start sector in LBA */
-    UINT count   /* Number of sectors to read */
-    )
-{
-
-    __attribute__((aligned(16))) static u8 tweak[0x10];
-    __attribute__((aligned(16))) static u64 prev_cluster = -1;
-    __attribute__((aligned(16))) static u32 prev_sector = 0;
-    u32 tweak_exp = 0;
-    bool regen_tweak = true;
-
-    if (nx_emmc_part_read(&storage, prodinfo_part, sector, count, buff))
-    {
-        if (prev_cluster != sector / 0x20)
-        { // sector in different cluster than last read
-            prev_cluster = sector / 0x20;
-            tweak_exp = sector % 0x20;
-        }
-        else if (sector > prev_sector)
-        { // sector in same cluster and past last sector
-            tweak_exp = sector - prev_sector - 1;
-            regen_tweak = false;
-        }
-        else
-        { // sector in same cluster and before or same as last sector
-            tweak_exp = sector % 0x20;
-        }
-
-        // fatfs will never pull more than a cluster
-        _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-
-        prev_sector = sector + count - 1;
-        return RES_OK;
-    }
-
-    return RES_ERROR;
-}
-
-DRESULT disk_write_prod(
-
-    BYTE *buff,   /* Data buffer to store read data */
-    DWORD sector, /* Start sector in LBA */
-    UINT count   /* Number of sectors to read */
-    )
-{
-
-    __attribute__((aligned(16))) static u8 tweak[0x10];
-    __attribute__((aligned(16))) static u64 prev_cluster = -1;
-    __attribute__((aligned(16))) static u32 prev_sector = 0;
-    u32 tweak_exp = 0;
-    bool regen_tweak = true;
-
-    if (prev_cluster != sector / 0x20)
-    { // sector in different cluster than last read
-        prev_cluster = sector / 0x20;
-        tweak_exp = sector % 0x20;
-    }
-    else if (sector > prev_sector)
-    { // sector in same cluster and past last sector
-        tweak_exp = sector - prev_sector - 1;
-        regen_tweak = false;
-    }
-    else
-    { // sector in same cluster and before or same as last sector
-        tweak_exp = sector % 0x20;
-    }
-
-    // fatfs will never pull more than a cluster
-    _emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-    if (nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff))
-    {
-        prev_sector = sector + count - 1;
-        return RES_OK;
-    }
-
-    return RES_ERROR;
-}
-
-DRESULT disk_read(
-    BYTE pdrv,    /* Physical drive number to identify the drive */
-    BYTE *buff,   /* Data buffer to store read data */
-    DWORD sector, /* Start sector in LBA */
-    UINT count    /* Number of sectors to read */
+DRESULT disk_read (
+    BYTE pdrv,		/* Physical drive number to identify the drive */
+    BYTE *buff,		/* Data buffer to store read data */
+    DWORD sector,	/* Start sector in LBA */
+    UINT count		/* Number of sectors to read */
 )
 {
     switch (pdrv)
     {
     case 0:
-        return sdmmc_storage_read(&sd_storage, sector, count, buff) ? RES_OK : RES_ERROR;
+        if (((u32)buff >= DRAM_START) && !((u32)buff % 8))
+            return sdmmc_storage_read(&sd_storage, sector, count, buff) ? RES_OK : RES_ERROR;
+        u8 *buf = (u8 *)SDMMC_UPPER_BUFFER;
+        if (sdmmc_storage_read(&sd_storage, sector, count, buf))
+        {
+            memcpy(buff, buf, 512 * count);
+            return RES_OK;
+        }
+        return RES_ERROR;
 
     case 1:;
-        __attribute__((aligned(16))) static u8 tweak[0x10];
-        __attribute__((aligned(16))) static u64 prev_cluster = -1;
-        __attribute__((aligned(16))) static u32 prev_sector = 0;
+        __attribute__ ((aligned (16))) static u8 tweak[0x10];
+        __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
+        __attribute__ ((aligned (16))) static u32 prev_sector = 0;
         u32 tweak_exp = 0;
         bool regen_tweak = true, cache_sector = false;
 
+        if (secindex == 0 || clear_sector_cache) {
+            free(sector_cache);
+            sector_cache = (sector_cache_t *)malloc(sizeof(sector_cache_t) * MAX_SEC_CACHE_ENTRIES);
+            clear_sector_cache = false;
+            secindex = 0;
+        }
+
         u32 s = 0;
-        if (count == 1)
-        {
-            for (; s < secindex; s++)
-            {
-                if (sector_cache[s].sector == sector)
-                {
+        if (count == 1) {
+            for ( ; s < secindex; s++) {
+                if (sector_cache[s].sector == sector) {
                     sector_cache[s].visit_count++;
                     memcpy(buff, sector_cache[s].cached_sector, 0x200);
                     memcpy(tweak, sector_cache[s].tweak, 0x10);
@@ -247,8 +173,7 @@ DRESULT disk_read(
                 }
             }
             // add to cache
-            if (s == secindex && s < MAX_SEC_CACHE_ENTRIES)
-            {
+            if (s == secindex && s < MAX_SEC_CACHE_ENTRIES) {
                 sector_cache[s].sector = sector;
                 sector_cache[s].visit_count++;
                 cache_sector = true;
@@ -256,27 +181,20 @@ DRESULT disk_read(
             }
         }
 
-        if (nx_emmc_part_read(&storage, system_part, sector, count, buff))
-        {
-            if (prev_cluster != sector / 0x20)
-            { // sector in different cluster than last read
+        if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
+            if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
                 prev_cluster = sector / 0x20;
                 tweak_exp = sector % 0x20;
-            }
-            else if (sector > prev_sector)
-            { // sector in same cluster and past last sector
+            } else if (sector > prev_sector) { // sector in same cluster and past last sector
                 tweak_exp = sector - prev_sector - 1;
                 regen_tweak = false;
-            }
-            else
-            { // sector in same cluster and before or same as last sector
+            } else { // sector in same cluster and before or same as last sector
                 tweak_exp = sector % 0x20;
             }
 
             // fatfs will never pull more than a cluster
             _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-            if (cache_sector)
-            {
+            if (cache_sector) {
                 memcpy(sector_cache[s].cached_sector, buff, 0x200);
                 memcpy(sector_cache[s].tweak, tweak, 0x10);
             }
@@ -288,22 +206,29 @@ DRESULT disk_read(
     return RES_ERROR;
 }
 
-DRESULT disk_write(
-    BYTE pdrv,        /* Physical drive number to identify the drive */
-    const BYTE *buff, /* Data to be written */
-    DWORD sector,     /* Start sector in LBA */
-    UINT count        /* Number of sectors to write */
+DRESULT disk_write (
+    BYTE pdrv,			/* Physical drive number to identify the drive */
+    const BYTE *buff,	/* Data to be written */
+    DWORD sector,		/* Start sector in LBA */
+    UINT count			/* Number of sectors to write */
 )
 {
     if (pdrv == 1)
         return RES_WRPRT;
-    return sdmmc_storage_write(&sd_storage, sector, count, (void *)buff) ? RES_OK : RES_ERROR;
+
+    if (((u32)buff >= DRAM_START) && !((u32)buff % 8))
+        return sdmmc_storage_write(&sd_storage, sector, count, (void *)buff) ? RES_OK : RES_ERROR;
+    u8 *buf = (u8 *)SDMMC_UPPER_BUFFER; //TODO: define this somewhere.
+    memcpy(buf, buff, 512 * count);
+    if (sdmmc_storage_write(&sd_storage, sector, count, buf))
+        return RES_OK;
+    return RES_ERROR;
 }
 
-DRESULT disk_ioctl(
-    BYTE pdrv, /* Physical drive number (0..) */
-    BYTE cmd,  /* Control code */
-    void *buff /* Buffer to send/receive control data */
+DRESULT disk_ioctl (
+    BYTE pdrv,		/* Physical drive number (0..) */
+    BYTE cmd,		/* Control code */
+    void *buff		/* Buffer to send/receive control data */
 )
 {
     return RES_OK;

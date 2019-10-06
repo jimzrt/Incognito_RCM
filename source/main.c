@@ -34,7 +34,7 @@
 #include "utils/util.h"
 #include "utils/btn.h"
 
-#include "keys/keys.h"
+#include "incognito/incognito.h"
 
 sdmmc_t sd_sdmmc;
 sdmmc_storage_t sd_storage;

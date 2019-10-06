@@ -19,10 +19,12 @@
 
 #include "../utils/types.h"
 
+
 //testing
-void test();
+void screenshot(const char* suffix);
 //testing
 
+bool isSysNAND();
 bool dump_keys();
 bool incognito();
 void cleanUp();

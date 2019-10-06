@@ -1,12 +1,13 @@
 Incognito_RCM
 =
 Incognito_RCM is a bare metal Nintendo Switch payload that derives encryption keys for de- and encrypting PRODINFO partition (sysnand and emummc) and wiping personal information from your Nintendo Switch as to go online while worrying slightly less about a ban.
+It has a builtin backup and restore functionality.
 
 It is heavily based on [Lockpick_RCM](https://github.com/shchmue/Lockpick_RCM) and takes inspiration from [incognito](https://github.com/blawar/incognito).
 
 Massive Thanks to CTCaer, shchmue and blawar!
 
-This project is in early stage, so have a nand backup!! There is not much of error handling going on.
+This project is in early stage, so have a nand backup!!
 
 Usage
 =
@@ -15,7 +16,16 @@ Usage
 * Choose either Incognito (sysNAND) or Incognito (emuMMC) to wipe personal information
 * If you ever want to revert, choose restore menu points
 
-Keep in mind that backups will be overwritten, so don't backup after applying Incognito!
+Screenshots
+=
+
+Main            |  Incognito
+:-------------------------:|:-------------------------:
+![](/res/main.png)  |  ![](/res/incognito.png)
+
+Backup            |  Restore
+:-------------------------:|:-------------------------:
+![](/res/backup.png)  |  ![](/res/restore.png)
 
 Building
 =

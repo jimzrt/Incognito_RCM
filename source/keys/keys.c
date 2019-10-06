@@ -273,7 +273,17 @@ bool dump_keys()
     se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
-    gfx_printf("%kGot keys!\n", COLOR_GREEN);
+    gfx_printf("%kGot keys!\n%kValidate...", COLOR_GREEN,COLOR_YELLOW);
+    const char magic[4] = "CAL0";
+    char buffer[4];
+    readData((u8 *)buffer, 0, 4, NULL);
+    if(memcmp(magic, buffer, 4) == 0){
+        gfx_printf("%kOK!\n", COLOR_GREEN);
+    } else {
+        gfx_printf("%kError!\n", COLOR_RED);
+        return false;
+    }
+    
     char serial[15];
     readData((u8 *)serial, 0x250, 15, NULL);
 
@@ -294,7 +304,7 @@ bool erase(u32 offset, u32 length)
 bool writeSerial()
 {
     const char *junkSerial;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    if (isSysNAND())
     {
         junkSerial = "XAW00000000000";
     }
@@ -311,7 +321,7 @@ bool incognito()
     gfx_printf("%kChecking if backup exists...\n", COLOR_YELLOW);
     if (!checkBackupExists())
     {
-        gfx_printf("%kI'm sorry Dave, I'm afraid I can't do that...\n%kWill make a backup first...\n", COLOR_RED, COLOR_YELLOW);
+        gfx_printf("%kI'm sorry Dave, I'm afraid I can't do that..\n%kWill make a backup first...\n", COLOR_RED, COLOR_YELLOW);
         if (!backupProdinfo())
             return false;
     }
@@ -357,7 +367,7 @@ bool incognito()
         return false;
     
 
-    gfx_printf("\n%kIncognito done!\n\n", COLOR_GREEN);
+    gfx_printf("\n%kIncognito done!\n", COLOR_GREEN);
     return true;
 }
 
@@ -396,7 +406,6 @@ static inline u32 _read_le_u32(const void *buffer, u32 offset)
 
 bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32, u32))
 {
-
     if (progress_callback != NULL)
     {
         (*progress_callback)(0, length);
@@ -583,26 +592,22 @@ out:
     return result;
 }
 
-void test()
+void screenshot(const char *filename)
 {
-    // u32 size = 262144;
-    // gfx_printf("%kTest reading %d bytes\n", COLOR_ORANGE, size);
-    // u8 *buffer = (u8 *)malloc(NX_EMMC_BLOCKSIZE);
-    // u8* bigBuffer = (u8 *)malloc(size);
-    // u32 offset = 0;
-    // readData(bigBuffer, 0, size, ENCRYPTED);
-    // while(size > NX_EMMC_BLOCKSIZE){
-    //     readData(buffer, offset, NX_EMMC_BLOCKSIZE, ENCRYPTED);
-    //     if(memcmp(buffer, bigBuffer + offset, NX_EMMC_BLOCKSIZE) != 0){
-    //         gfx_printf("arry mismatch on offset %d", offset);
+    sd_mount();
 
-    //     }
-    //     size -= NX_EMMC_BLOCKSIZE;
-    //     offset += NX_EMMC_BLOCKSIZE;
-    // }
-    // free(buffer);
-    // free(bigBuffer);
-    // gfx_printf("%Reading Done!\n", COLOR_ORANGE, size);
+    FIL fp;
+    if (f_open(&fp, filename, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+    {
+        gfx_printf("\n%kCannot write image!\n", COLOR_RED);
+        return;
+    }
+    u32 size;
+    u8 *buffer = gfx_bmp_screenshot(&size);
+
+    f_write(&fp, buffer, size, NULL);
+    f_close(&fp);
+    free(buffer);
 }
 
 bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
@@ -670,7 +675,6 @@ bool verifyClientCertHash()
 
 bool verifyProdinfo()
 {
-
     gfx_printf("%kVerifying client cert hash and CAL0 hash...\n", COLOR_YELLOW);
 
     if (verifyClientCertHash() && verifyCal0Hash())
@@ -712,38 +716,43 @@ void print_progress(u32 count, u32 max)
     gfx_con.y = cur_y;
 }
 
-bool getLastBackup()
+// bool getLastBackup()
+// {
+//     DIR dir;
+//     //char* path = "sd:/incognito";
+//     char path[255];
+//     strcpy(path, "sd:/incognito");
+//     FILINFO fno;
+//     FRESULT res;
+
+//     res = f_opendir(&dir, path); /* Open the directory */
+//     if (res == FR_OK)
+//     {
+//         for (;;)
+//         {
+//             res = f_readdir(&dir, &fno); /* Read a directory item */
+//             if (res != FR_OK || fno.fname[0] == 0)
+//                 break; /* Break on error or end of dir */
+//             if ((fno.fattrib & AM_DIR) == 0)
+//             { /* It is not a directory */
+//                 gfx_printf("%s/%s\n", path, fno.fname);
+//             }
+//         }
+//         f_closedir(&dir);
+//     }
+
+//     return res;
+// }
+
+bool isSysNAND()
 {
-    DIR dir;
-    //char* path = "sd:/incognito";
-    char path[255];
-    strcpy(path, "sd:/incognito");
-    FILINFO fno;
-    FRESULT res;
-
-    res = f_opendir(&dir, path); /* Open the directory */
-    if (res == FR_OK)
-    {
-        for (;;)
-        {
-            res = f_readdir(&dir, &fno); /* Read a directory item */
-            if (res != FR_OK || fno.fname[0] == 0)
-                break; /* Break on error or end of dir */
-            if ((fno.fattrib & AM_DIR) == 0)
-            { /* It is not a directory */
-                gfx_printf("%s/%s\n", path, fno.fname);
-            }
-        }
-        f_closedir(&dir);
-    }
-
-    return res;
+    return (!emu_cfg.enabled || h_cfg.emummc_force_disable);
 }
 
 bool checkBackupExists()
 {
     char *name;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    if (isSysNAND())
     {
         name = BACKUP_NAME_SYSNAND;
     }
@@ -758,7 +767,7 @@ bool backupProdinfo()
 {
     bool result = false;
     char *name;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    if (isSysNAND())
     {
         name = BACKUP_NAME_SYSNAND;
     }
@@ -779,7 +788,7 @@ bool backupProdinfo()
             filenameSuffix++;
         } while (f_stat(newName, NULL) == FR_OK);
         f_rename(name, newName);
-        gfx_printf("%kOld backup renamed to %s\n", COLOR_YELLOW, newName);
+        gfx_printf("%kOld backup renamed to:\n%s\n", COLOR_YELLOW, newName);
     }
 
     FIL fp;
@@ -806,7 +815,7 @@ bool backupProdinfo()
     f_sync(&fp);
 
     result = true;
-    gfx_printf("\n%kBackup to %s done!\n\n", COLOR_GREEN, name);
+    gfx_printf("\n%kBackup to %s done!\n", COLOR_GREEN, name);
 
 out:
     f_close(&fp);
@@ -821,7 +830,7 @@ bool restoreProdinfo()
     sd_mount();
 
     char *name;
-    if (!emu_cfg.enabled || h_cfg.emummc_force_disable)
+    if (isSysNAND())
     {
         name = BACKUP_NAME_SYSNAND;
     }
@@ -829,7 +838,7 @@ bool restoreProdinfo()
     {
         name = BACKUP_NAME_EMUNAND;
     }
-
+    
     gfx_printf("%kRestoring from %s...\n", COLOR_YELLOW, name);
 
     FIL fp;

@@ -600,7 +600,7 @@ u8 *gfx_bmp_screenshot(u32 *size)
 	bih.planes = 1;
 	bih.bit_count = 24;
 	bih.compression = 0;
-	bih.image_size = file_size;
+	bih.image_size = 0;
 	bih.ppm_x = ppm;
 	bih.ppm_y = ppm;
 	bih.clr_used = 0;

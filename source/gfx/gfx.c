@@ -18,6 +18,7 @@
 
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 #include "gfx.h"
 
 static const u8 _gfx_font[] = {
@@ -466,12 +467,12 @@ void gfx_hexdump(u32 base, const u8 *buf, u32 len)
 	gfx_con.fntsz = prevFontSize;
 }
 
-static int abs(int x)
-{
-	if (x < 0)
-		return -x;
-	return x;
-}
+// static int abs(int x)
+// {
+// 	if (x < 0)
+// 		return -x;
+// 	return x;
+// }
 
 void gfx_set_pixel(u32 x, u32 y, u32 color)
 {
@@ -545,4 +546,84 @@ void gfx_render_bmp_argb(const u32 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 
 		for (u32 x = pos_x; x < (pos_x + size_x); x++)
 			gfx_ctxt.fb[x + y * gfx_ctxt.stride] = buf[(size_y + pos_y - 1 - y ) * size_x + x - pos_x];
 	}
+}
+
+u8 *gfx_bmp_screenshot(u32 *size)
+{
+	// 14 bytes
+	struct bitmap_file_header
+	{
+		unsigned char bitmap_type[2]; // 2 bytes
+		int file_size;				  // 4 bytes
+		short reserved1;			  // 2 bytes
+		short reserved2;			  // 2 bytes
+		unsigned int offset_bits;	 // 4 bytes
+	} bfh;
+
+	// bitmap image header (40 bytes)
+	struct bitmap_image_header
+	{
+		unsigned int size_header;   // 4 bytes
+		unsigned int width;			// 4 bytes
+		unsigned int height;		// 4 bytes
+		short int planes;			// 2 bytes
+		short int bit_count;		// 2 bytes
+		unsigned int compression;   // 4 bytes
+		unsigned int image_size;	// 4 bytes
+		unsigned int ppm_x;			// 4 bytes
+		unsigned int ppm_y;			// 4 bytes
+		unsigned int clr_used;		// 4 bytes
+		unsigned int clr_important; // 4 bytes
+	} bih;
+
+	u32 *fb = gfx_ctxt.fb;
+
+	u32 width = gfx_ctxt.width;
+	u32 height = gfx_ctxt.height;
+
+	u32 image_size = width * height;
+
+	u32 file_size = 40 + 14 + 3 * image_size;
+
+	u32 dpi = 237;
+	u32 ppm = dpi * 39.375;
+
+	memcpy(&bfh.bitmap_type, "BM", 2);
+	bfh.file_size = file_size;
+	bfh.reserved1 = 0;
+	bfh.reserved2 = 0;
+	bfh.offset_bits = 0;
+
+	bih.size_header = sizeof(bih);
+	bih.width = width;
+	bih.height = height;
+	bih.planes = 1;
+	bih.bit_count = 24;
+	bih.compression = 0;
+	bih.image_size = file_size;
+	bih.ppm_x = ppm;
+	bih.ppm_y = ppm;
+	bih.clr_used = 0;
+	bih.clr_important = 0;
+
+	u8 *buffer = (u8 *)malloc(file_size);
+	u32 offset = 0;
+	memcpy(buffer, &bfh, 14);
+	offset += 14;
+	memcpy(buffer + offset, &bih, 40);
+	offset += 40;
+
+	for (int y = height - 1; y >= 0; y--)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			u32 index = width * y + x;
+
+			memcpy(buffer + offset, fb + index, 3);
+			offset += 3;
+		}
+	}
+
+	*size = file_size;
+	return buffer;
 }

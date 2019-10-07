@@ -49,7 +49,7 @@
 #define RETRY(exp)                                                                              \
     ({                                                                                          \
         u8 _attemptc_ = RETRY_COUNT;                                                            \
-        bool _resultb_ = false;                                                                         \
+        bool _resultb_ = false;                                                                 \
         while (_attemptc_--)                                                                    \
         {                                                                                       \
             if ((_resultb_ = exp))                                                              \
@@ -70,7 +70,6 @@ sdmmc_storage_t storage;
 sdmmc_t sdmmc;
 emmc_part_t *system_part;
 emmc_part_t *prodinfo_part;
-
 
 #define SECTORS_IN_CLUSTER 32
 #define PRODINFO_SIZE 0x3FBC00
@@ -287,17 +286,20 @@ bool dump_keys()
     se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
-    gfx_printf("%kGot keys!\n%kValidate...", COLOR_GREEN,COLOR_YELLOW);
+    gfx_printf("%kGot keys!\n%kValidate...", COLOR_GREEN, COLOR_YELLOW);
     const char magic[4] = "CAL0";
     char buffer[4];
     readData((u8 *)buffer, 0, 4, NULL);
-    if(memcmp(magic, buffer, 4) == 0){
+    if (memcmp(magic, buffer, 4) == 0)
+    {
         gfx_printf("%kOK!\n", COLOR_GREEN);
-    } else {
+    }
+    else
+    {
         gfx_printf("%kError!\n", COLOR_RED);
         return false;
     }
-    
+
     char serial[15] = "";
     readData((u8 *)serial, 0x250, 14, NULL);
 
@@ -343,43 +345,42 @@ bool incognito()
     gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-    
+
     gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
     if (!erase(0x0AE0, 0x800)) // client cert
         return false;
-    
+
     gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
     if (!erase(0x3AE0, 0x130)) // private key
         return false;
-    
+
     gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
     if (!erase(0x35E1, 0x006)) // deviceId
         return false;
-    
+
     gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
     if (!erase(0x36E1, 0x006)) // deviceId
         return false;
-    
+
     gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
     if (!erase(0x02B0, 0x180)) // device cert
         return false;
-    
+
     gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
     if (!erase(0x3D70, 0x240)) // device cert
         return false;
-    
+
     gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
     if (!erase(0x3FC0, 0x240)) // device key
         return false;
-    
+
     gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
     if (!writeClientCertHash())
         return false;
-    
+
     gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
     if (!writeCal0Hash())
         return false;
-    
 
     gfx_printf("\n%kIncognito done!\n", COLOR_GREEN);
     return true;
@@ -630,10 +631,13 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz, u8 *blob)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    if(blob == NULL){
-        if(!readData(buffer, offset, sz, NULL))
+    if (blob == NULL)
+    {
+        if (!readData(buffer, offset, sz, NULL))
             goto out;
-    } else {
+    }
+    else
+    {
         memcpy(buffer, blob + offset, sz);
     }
     u8 hash1[0x20];
@@ -641,10 +645,13 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz, u8 *blob)
 
     u8 hash2[0x20];
 
-    if(blob == NULL){
-        if(!readData(hash2, hashOffset, 0x20, NULL))
+    if (blob == NULL)
+    {
+        if (!readData(hash2, hashOffset, 0x20, NULL))
             goto out;
-    } else {
+    }
+    else
+    {
         memcpy(hash2, blob + hashOffset, 0x20);
     }
 
@@ -665,7 +672,8 @@ out:
 s32 getClientCertSize()
 {
     s32 buffer;
-    if(!RETRY(readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL))){
+    if (!RETRY(readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL)))
+    {
         return -1;
     }
     return buffer;
@@ -674,25 +682,26 @@ s32 getClientCertSize()
 s32 getCalibrationDataSize()
 {
     s32 buffer;
-    if(!RETRY(readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL))){
+    if (!RETRY(readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL)))
+    {
         return -1;
     }
     return buffer;
 }
 
 bool writeCal0Hash()
-{   
+{
     s32 calibrationSize = getCalibrationDataSize();
-    if(calibrationSize == -1)
+    if (calibrationSize == -1)
         return false;
-    
+
     return writeHash(0x20, 0x40, calibrationSize);
 }
 
 bool writeClientCertHash()
 {
     s32 certSize = getClientCertSize();
-    if(certSize == -1)
+    if (certSize == -1)
         return false;
 
     return writeHash(0x12E0, 0xAE0, certSize);
@@ -701,7 +710,7 @@ bool writeClientCertHash()
 bool verifyCal0Hash(u8 *blob)
 {
     s32 calibrationSize = getCalibrationDataSize();
-    if(calibrationSize == -1)
+    if (calibrationSize == -1)
         return false;
 
     return verifyHash(0x20, 0x40, calibrationSize, blob);
@@ -709,8 +718,8 @@ bool verifyCal0Hash(u8 *blob)
 
 bool verifyClientCertHash(u8 *blob)
 {
-     s32 certSize = getClientCertSize();
-    if(certSize == -1)
+    s32 certSize = getClientCertSize();
+    if (certSize == -1)
         return false;
 
     return verifyHash(0x12E0, 0xAE0, certSize, blob);
@@ -723,12 +732,15 @@ bool verifyProdinfo(u8 *blob)
     if (verifyClientCertHash(blob) && verifyCal0Hash(blob))
     {
         char serial[15] = "";
-        if(blob == NULL){
+        if (blob == NULL)
+        {
             readData((u8 *)serial, 0x250, 14, NULL);
-        } else {
+        }
+        else
+        {
             memcpy(serial, blob + 0x250, 14);
         }
-        
+
         gfx_printf("%kVerification successful!\n%kSerial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
         return true;
     }
@@ -853,7 +865,8 @@ bool backupProdinfo()
         gfx_printf("\n%kError reading from NAND!\n", COLOR_RED);
         goto out;
     }
-    if(!verifyProdinfo(bufferNX)){
+    if (!verifyProdinfo(bufferNX))
+    {
         goto out;
     }
     gfx_printf("%k\nWriting to file...\n", COLOR_YELLOW);
@@ -889,7 +902,7 @@ bool restoreProdinfo()
     {
         name = BACKUP_NAME_EMUNAND;
     }
-    
+
     gfx_printf("%kRestoring from %s...\n", COLOR_YELLOW, name);
 
     FIL fp;
@@ -907,7 +920,8 @@ bool restoreProdinfo()
         gfx_printf("\n%kError reading from file!\n", COLOR_RED);
         goto out;
     }
-    if(!verifyProdinfo(bufferNX)){
+    if (!verifyProdinfo(bufferNX))
+    {
         goto out;
     }
     gfx_printf("%kWriting to NAND...\n", COLOR_YELLOW);

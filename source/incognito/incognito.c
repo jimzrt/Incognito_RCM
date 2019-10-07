@@ -662,38 +662,58 @@ out:
     return result;
 }
 
-u32 certSize()
+s32 getClientCertSize()
 {
-    u32 buffer;
-    readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL);
+    s32 buffer;
+    if(!RETRY(readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL))){
+        return -1;
+    }
     return buffer;
 }
 
-u32 calibrationDataSize()
+s32 getCalibrationDataSize()
 {
-    u32 buffer;
-    readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL);
+    s32 buffer;
+    if(!RETRY(readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL))){
+        return -1;
+    }
     return buffer;
 }
 
 bool writeCal0Hash()
-{
-    return writeHash(0x20, 0x40, calibrationDataSize());
+{   
+    s32 calibrationSize = getCalibrationDataSize();
+    if(calibrationSize == -1)
+        return false;
+    
+    return writeHash(0x20, 0x40, calibrationSize);
 }
 
 bool writeClientCertHash()
 {
-    return writeHash(0x12E0, 0xAE0, certSize());
+    s32 certSize = getClientCertSize();
+    if(certSize == -1)
+        return false;
+
+    return writeHash(0x12E0, 0xAE0, certSize);
 }
 
 bool verifyCal0Hash(u8 *blob)
 {
-    return verifyHash(0x20, 0x40, calibrationDataSize(), blob);
+    s32 calibrationSize = getCalibrationDataSize();
+    if(calibrationSize == -1)
+        return false;
+
+    return verifyHash(0x20, 0x40, calibrationSize, blob);
 }
 
 bool verifyClientCertHash(u8 *blob)
 {
-    return verifyHash(0x12E0, 0xAE0, certSize(), blob);
+     s32 certSize = getClientCertSize();
+    if(certSize == -1)
+        return false;
+
+    return verifyHash(0x12E0, 0xAE0, certSize, blob);
 }
 
 bool verifyProdinfo(u8 *blob)

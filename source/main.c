@@ -161,7 +161,7 @@ void incognito_sysnand()
         gfx_printf("%kError applying Incognito!\nWill restore backup!\n", COLOR_RED);
         backupProdinfo();
     }
-    if (!verifyProdinfo())
+    if (!verifyProdinfo(NULL))
     {
         gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
     }
@@ -184,7 +184,7 @@ void incognito_emunand()
         gfx_printf("%kError applying Incognito!\nWill restore backup!\n", COLOR_RED);
         backupProdinfo();
     }
-    if (!verifyProdinfo())
+    if (!verifyProdinfo(NULL))
     {
         gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
     }
@@ -232,9 +232,9 @@ void restore_sysnand()
         goto out;
 
     restoreProdinfo();
-    if (!verifyProdinfo())
+    if (!verifyProdinfo(NULL))
     {
-        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+        gfx_printf("%kThis should not happen!\nTry again or restore via NAND backup from hekate!\n", COLOR_RED);
     }
 out:
     cleanUp();
@@ -252,9 +252,9 @@ void restore_emunand()
         goto out;
 
     restoreProdinfo();
-    if (!verifyProdinfo())
+    if (!verifyProdinfo(NULL))
     {
-        gfx_printf("%kThis should not happen!\nTry restoring or restore via NAND backup from hekate!\n", COLOR_RED);
+        gfx_printf("%kThis should not happen!\nTry again or restore via NAND backup from hekate!\n", COLOR_RED);
     }
 out:
     cleanUp();

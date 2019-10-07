@@ -49,7 +49,7 @@
 #define RETRY(exp)                                                                              \
     ({                                                                                          \
         u8 _attemptc_ = RETRY_COUNT;                                                            \
-        bool _resultb_;                                                                         \
+        bool _resultb_ = false;                                                                         \
         while (_attemptc_--)                                                                    \
         {                                                                                       \
             if ((_resultb_ = exp))                                                              \
@@ -298,8 +298,8 @@ bool dump_keys()
         return false;
     }
     
-    char serial[15];
-    readData((u8 *)serial, 0x250, 15, NULL);
+    char serial[15] = "";
+    readData((u8 *)serial, 0x250, 14, NULL);
 
     gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
 
@@ -626,19 +626,27 @@ void screenshot(const char *filename)
 }
 #endif
 
-bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
+bool verifyHash(u32 hashOffset, u32 offset, u32 sz, u8 *blob)
 {
     bool result = false;
     u8 *buffer = (u8 *)malloc(sz);
-    if(!readData(buffer, offset, sz, NULL))
-        goto out;
+    if(blob == NULL){
+        if(!readData(buffer, offset, sz, NULL))
+            goto out;
+    } else {
+        memcpy(buffer, blob + offset, sz);
+    }
     u8 hash1[0x20];
     se_calc_sha256(hash1, buffer, sz);
 
     u8 hash2[0x20];
 
-    if(!readData(hash2, hashOffset, 0x20, NULL))
-        goto out;
+    if(blob == NULL){
+        if(!readData(hash2, hashOffset, 0x20, NULL))
+            goto out;
+    } else {
+        memcpy(hash2, blob + hashOffset, 0x20);
+    }
 
     if (memcmp(hash1, hash2, 0x20))
     {
@@ -678,29 +686,33 @@ bool writeClientCertHash()
     return writeHash(0x12E0, 0xAE0, certSize());
 }
 
-bool verifyCal0Hash()
+bool verifyCal0Hash(u8 *blob)
 {
-    return verifyHash(0x20, 0x40, calibrationDataSize());
+    return verifyHash(0x20, 0x40, calibrationDataSize(), blob);
 }
 
-bool verifyClientCertHash()
+bool verifyClientCertHash(u8 *blob)
 {
-
-    return verifyHash(0x12E0, 0xAE0, certSize());
+    return verifyHash(0x12E0, 0xAE0, certSize(), blob);
 }
 
-bool verifyProdinfo()
+bool verifyProdinfo(u8 *blob)
 {
-    gfx_printf("%kVerifying client cert hash and CAL0 hash...\n", COLOR_YELLOW);
+    gfx_printf("%kVerifying client cert hash and CAL0 hash%s...\n", COLOR_YELLOW, blob != NULL ? "\nfrom backup" : "");
 
-    if (verifyClientCertHash() && verifyCal0Hash())
+    if (verifyClientCertHash(blob) && verifyCal0Hash(blob))
     {
-        char serial[15];
-        readData((u8 *)serial, 0x250, 15, NULL);
-        gfx_printf("%kVerification successful!\n%kNew Serial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
+        char serial[15] = "";
+        if(blob == NULL){
+            readData((u8 *)serial, 0x250, 14, NULL);
+        } else {
+            memcpy(serial, blob + 0x250, 14);
+        }
+        
+        gfx_printf("%kVerification successful!\n%kSerial:%s\n", COLOR_GREEN, COLOR_BLUE, serial);
         return true;
     }
-    gfx_printf("%kVerification not successful!\nPlease restore backup!\n", COLOR_RED);
+    gfx_printf("%kVerification not successful!\n", COLOR_RED);
     return false;
 }
 
@@ -795,7 +807,7 @@ bool backupProdinfo()
     gfx_printf("%kBacking up %s...\n", COLOR_YELLOW, name);
     if (checkBackupExists())
     {
-        gfx_printf("%kBackup already exists!\nWill rename old backup.\n", COLOR_YELLOW);
+        gfx_printf("%kBackup already exists!\nWill rename old backup.\n", COLOR_ORANGE);
         u32 filenameSuffix = 0;
         char newName[255];
         do
@@ -819,6 +831,9 @@ bool backupProdinfo()
     if (!readData(bufferNX, 0, PRODINFO_SIZE, print_progress))
     {
         gfx_printf("\n%kError reading from NAND!\n", COLOR_RED);
+        goto out;
+    }
+    if(!verifyProdinfo(bufferNX)){
         goto out;
     }
     gfx_printf("%k\nWriting to file...\n", COLOR_YELLOW);
@@ -845,7 +860,7 @@ bool restoreProdinfo()
     bool result = false;
     sd_mount();
 
-    char *name;
+    const char *name;
     if (isSysNAND())
     {
         name = BACKUP_NAME_SYSNAND;
@@ -870,6 +885,9 @@ bool restoreProdinfo()
     if (f_read(&fp, bufferNX, PRODINFO_SIZE, &bytesRead) != FR_OK || bytesRead != PRODINFO_SIZE)
     {
         gfx_printf("\n%kError reading from file!\n", COLOR_RED);
+        goto out;
+    }
+    if(!verifyProdinfo(bufferNX)){
         goto out;
     }
     gfx_printf("%kWriting to NAND...\n", COLOR_YELLOW);

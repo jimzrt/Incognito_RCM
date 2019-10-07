@@ -32,7 +32,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32,
 bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32, u32));
 bool writeClientCertHash();
 bool writeCal0Hash();
-bool verifyProdinfo();
+bool verifyProdinfo(u8 *blob);
 bool backupProdinfo();
 bool restoreProdinfo();
 bool checkBackupExists();

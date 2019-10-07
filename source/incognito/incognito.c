@@ -669,29 +669,44 @@ out:
     return result;
 }
 
-s32 getClientCertSize()
+s32 getClientCertSize(u8 *blob)
 {
     s32 buffer;
-    if (!RETRY(readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL)))
+    if (blob == NULL)
     {
-        return -1;
+        if (!RETRY(readData((u8 *)&buffer, 0x0AD0, sizeof(buffer), NULL)))
+        {
+            return -1;
+        }
+    }
+    else
+    {
+        memcpy(&buffer, blob + 0x0AD0, sizeof(buffer));
     }
     return buffer;
 }
 
-s32 getCalibrationDataSize()
+s32 getCalibrationDataSize(u8 *blob)
 {
     s32 buffer;
-    if (!RETRY(readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL)))
+    if (blob == NULL)
     {
-        return -1;
+        if (!RETRY(readData((u8 *)&buffer, 0x08, sizeof(buffer), NULL)))
+        {
+            return -1;
+        }
     }
+    else
+    {
+        memcpy(&buffer, blob + 0x08, sizeof(buffer));
+    }
+
     return buffer;
 }
 
 bool writeCal0Hash()
 {
-    s32 calibrationSize = getCalibrationDataSize();
+    s32 calibrationSize = getCalibrationDataSize(NULL);
     if (calibrationSize == -1)
         return false;
 
@@ -700,7 +715,7 @@ bool writeCal0Hash()
 
 bool writeClientCertHash()
 {
-    s32 certSize = getClientCertSize();
+    s32 certSize = getClientCertSize(NULL);
     if (certSize == -1)
         return false;
 
@@ -709,7 +724,7 @@ bool writeClientCertHash()
 
 bool verifyCal0Hash(u8 *blob)
 {
-    s32 calibrationSize = getCalibrationDataSize();
+    s32 calibrationSize = getCalibrationDataSize(blob);
     if (calibrationSize == -1)
         return false;
 
@@ -718,7 +733,7 @@ bool verifyCal0Hash(u8 *blob)
 
 bool verifyClientCertHash(u8 *blob)
 {
-    s32 certSize = getClientCertSize();
+    s32 certSize = getClientCertSize(blob);
     if (certSize == -1)
         return false;
 
@@ -865,6 +880,7 @@ bool backupProdinfo()
         gfx_printf("\n%kError reading from NAND!\n", COLOR_RED);
         goto out;
     }
+    gfx_putc('\n');
     if (!verifyProdinfo(bufferNX))
     {
         goto out;

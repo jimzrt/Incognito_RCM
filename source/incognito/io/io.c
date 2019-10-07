@@ -84,7 +84,7 @@ bool prodinfo_read(
     u32 count   /* Number of sectors to read */
     )
 {
-
+    bool result = false;
     __attribute__((aligned(16))) static u8 tweak[0x10];
     __attribute__((aligned(16))) static u64 prev_cluster = -1;
     __attribute__((aligned(16))) static u32 prev_sector = 0;
@@ -109,13 +109,13 @@ bool prodinfo_read(
         }
 
         // fatfs will never pull more than a cluster
-        _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+        result = _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
 
         prev_sector = sector + count - 1;
-        return true;
+        return result;
     }
 
-    return false;
+    return result;
 }
 
 bool prodinfo_write(
@@ -124,7 +124,6 @@ bool prodinfo_write(
     u32 count   /* Number of sectors to read */
     )
 {
-
     __attribute__((aligned(16))) static u8 tweak[0x10];
     __attribute__((aligned(16))) static u64 prev_cluster = -1;
     __attribute__((aligned(16))) static u32 prev_sector = 0;
@@ -147,7 +146,9 @@ bool prodinfo_write(
     }
 
     // fatfs will never pull more than a cluster
-    _emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+    if(!_emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200)){
+        return false;
+    }
     if (nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff))
     {
         prev_sector = sector + count - 1;

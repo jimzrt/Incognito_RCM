@@ -38,8 +38,10 @@ void gfx_putc(char c);
 void gfx_puts(const char *s);
 void gfx_printf(const char *fmt, ...);
 void gfx_print_header();
+#ifdef DEBUG
 void gfx_hexdump(u32 base, const u8 *buf, u32 len);
-
+u8 *gfx_bmp_screenshot(u32 *size);
+#endif
 void gfx_set_pixel(u32 x, u32 y, u32 color);
 void gfx_line(int x0, int y0, int x1, int y1, u32 color);
 void gfx_put_small_sep();
@@ -48,7 +50,6 @@ void gfx_set_rect_grey(const u8 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 pos
 void gfx_set_rect_rgb(const u8 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 pos_y);
 void gfx_set_rect_argb(const u32 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 pos_y);
 void gfx_render_bmp_argb(const u32 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 pos_y);
-u8 *gfx_bmp_screenshot(u32 *size);
 
 // Global gfx console and context.
 gfx_ctxt_t gfx_ctxt;

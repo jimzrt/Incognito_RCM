@@ -45,6 +45,20 @@
 #include "io/io.h"
 #include <string.h>
 
+#define RETRY_COUNT 5
+#define RETRY(exp)                                                                              \
+    ({                                                                                          \
+        u8 _attemptc_ = RETRY_COUNT;                                                            \
+        bool _resultb_;                                                                         \
+        while (_attemptc_--)                                                                    \
+        {                                                                                       \
+            if ((_resultb_ = exp))                                                              \
+                break;                                                                          \
+            gfx_printf("%kretry %d/%d...\n", COLOR_RED, RETRY_COUNT - _attemptc_, RETRY_COUNT); \
+        }                                                                                       \
+        _resultb_;                                                                              \
+    })
+
 extern bool sd_mount();
 extern void sd_unmount();
 extern int sd_save_to_file(void *buf, u32 size, const char *filename);
@@ -208,8 +222,8 @@ bool dump_keys()
         if (memcmp(keyblob_block, keyblob_mac, 0x10))
         {
             EPRINTFARGS("Keyblob %x corrupt.", i);
-            gfx_hexdump(i, keyblob_block, 0x10);
-            gfx_hexdump(i, keyblob_mac, 0x10);
+            // gfx_hexdump(i, keyblob_block, 0x10);
+            // gfx_hexdump(i, keyblob_mac, 0x10);
             continue;
         }
 
@@ -423,7 +437,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32,
     while (clusterOffset + sectorCount > SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (!prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead))
+        if (!RETRY(prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead)))
             goto out;
 
         sector += sectorsToRead;
@@ -438,7 +452,7 @@ bool readData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32,
     if (sectorCount == 0)
         goto done;
 
-    if (!prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount))
+    if (!RETRY(prodinfo_read(tmp + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount)))
         goto out;
 
     memcpy(buffer, tmp + newOffset, length);
@@ -482,11 +496,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
         {
             bytesToWrite = length;
         }
-        if (!prodinfo_read(tmp_sec, sector, 1))
+        if (!RETRY(prodinfo_read(tmp_sec, sector, 1)))
             goto out;
 
         memcpy(tmp_sec + newOffset, buffer, bytesToWrite);
-        if (!prodinfo_write(tmp_sec, sector, 1))
+        if (!RETRY(prodinfo_write(tmp_sec, sector, 1)))
             goto out;
 
         sector++;
@@ -511,7 +525,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
     while (clusterOffset + sectorCount >= SECTORS_IN_CLUSTER)
     {
         u32 sectorsToRead = SECTORS_IN_CLUSTER - clusterOffset;
-        if (!prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead))
+        if (!RETRY(prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorsToRead)))
             goto out;
 
         sector += sectorsToRead;
@@ -529,7 +543,7 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
     // write remaining sectors
     if (sectorCount > 0)
     {
-        if (!prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount))
+        if (!RETRY(prodinfo_write(buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), sector, sectorCount)))
             goto out;
 
         length -= sectorCount * NX_EMMC_BLOCKSIZE;
@@ -552,11 +566,11 @@ bool writeData(u8 *buffer, u32 offset, u32 length, void (*progress_callback)(u32
         goto out;
     }
 
-    if (!prodinfo_read(tmp_sec, sector, 1))
+    if (!RETRY(prodinfo_read(tmp_sec, sector, 1)))
         goto out;
 
     memcpy(tmp_sec, buffer + newOffset + (sectorOffset * NX_EMMC_BLOCKSIZE), length);
-    if (!prodinfo_write(tmp_sec, sector, 1))
+    if (!RETRY(prodinfo_write(tmp_sec, sector, 1)))
         goto out;
 
 done:
@@ -592,6 +606,7 @@ out:
     return result;
 }
 
+#ifdef DEBUG
 void screenshot(const char *filename)
 {
     sd_mount();
@@ -609,6 +624,7 @@ void screenshot(const char *filename)
     f_close(&fp);
     free(buffer);
 }
+#endif
 
 bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
 {
@@ -627,8 +643,8 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz)
     if (memcmp(hash1, hash2, 0x20))
     {
         EPRINTF("error: hash verification failed\n");
-        gfx_hexdump(0, hash1, 0x20);
-        gfx_hexdump(0, hash2, 0x20);
+        // gfx_hexdump(0, hash1, 0x20);
+        // gfx_hexdump(0, hash2, 0x20);
         goto out;
     }
 

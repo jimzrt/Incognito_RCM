@@ -765,30 +765,7 @@ bool verifyProdinfo(u8 *blob)
 
 void print_progress(u32 count, u32 max)
 {
-    u32 cur_x = gfx_con.x;
-    u32 cur_y = gfx_con.y;
-
-    const u8 width = 20;
-    count = (int)((count * 100 / (float)max) / (100 / width));
-    max = width;
-    const char prefix[] = "Progress: [";
-    const char suffix[] = "]";
-    const size_t prefix_length = sizeof(prefix) - 1;
-    const size_t suffix_length = sizeof(suffix) - 1;
-    char *buffer = calloc(max + prefix_length + suffix_length + 1, 1); // +1 for \0
-    size_t i = 0;
-
-    strcpy(buffer, prefix);
-    for (; i < max; ++i)
-    {
-        buffer[prefix_length + i] = i < count ? '#' : ' ';
-    }
-
-    strcpy(&buffer[prefix_length + i], suffix);
-    gfx_printf("%k%s %d%%\n", COLOR_BLUE, buffer, (100 / max) * count);
-    free(buffer);
-    gfx_con.x = cur_x;
-    gfx_con.y = cur_y;
+    tui_pbar(0, gfx_con.y + 1, (int)(count * 100 / (float)max), COLOR_BLUE, COLOR_ORANGE);
 }
 
 // bool getLastBackup()

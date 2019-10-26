@@ -107,7 +107,7 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
         pdst += 0x10;
     }
 
-    se_aes_crypt_ecb(ks2, 0, dst, secsize, src, secsize);
+    se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
 
     pdst = (u8 *)dst;
 
@@ -150,12 +150,11 @@ DRESULT disk_read (
         __attribute__ ((aligned (16))) static u8 tweak[0x10];
         __attribute__ ((aligned (16))) static u64 prev_cluster = -1;
         __attribute__ ((aligned (16))) static u32 prev_sector = 0;
-        u32 tweak_exp = 0;
-        bool regen_tweak = true, cache_sector = false;
+        bool needs_cache_sector = false;
 
         if (secindex == 0 || clear_sector_cache) {
-            free(sector_cache);
-            sector_cache = (sector_cache_t *)malloc(sizeof(sector_cache_t) * MAX_SEC_CACHE_ENTRIES);
+            if (!sector_cache)
+                sector_cache = (sector_cache_t *)malloc(sizeof(sector_cache_t) * MAX_SEC_CACHE_ENTRIES);
             clear_sector_cache = false;
             secindex = 0;
         }
@@ -176,12 +175,14 @@ DRESULT disk_read (
             if (s == secindex && s < MAX_SEC_CACHE_ENTRIES) {
                 sector_cache[s].sector = sector;
                 sector_cache[s].visit_count++;
-                cache_sector = true;
+                needs_cache_sector = true;
                 secindex++;
             }
         }
 
         if (nx_emmc_part_read(&storage, system_part, sector, count, buff)) {
+            u32 tweak_exp = 0;
+            bool regen_tweak = true;
             if (prev_cluster != sector / 0x20) { // sector in different cluster than last read
                 prev_cluster = sector / 0x20;
                 tweak_exp = sector % 0x20;
@@ -194,7 +195,7 @@ DRESULT disk_read (
 
             // fatfs will never pull more than a cluster
             _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
-            if (cache_sector) {
+            if (needs_cache_sector) {
                 memcpy(sector_cache[s].cached_sector, buff, 0x200);
                 memcpy(sector_cache[s].tweak, tweak, 0x10);
             }

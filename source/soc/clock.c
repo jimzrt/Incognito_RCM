@@ -15,6 +15,7 @@
  */
 
 #include "../soc/clock.h"
+#include "../soc/kfuse.h"
 #include "../soc/t210.h"
 #include "../utils/util.h"
 #include "../storage/sdmmc.h"
@@ -188,6 +189,7 @@ void clock_enable_kfuse()
 	usleep(10);
 	CLOCK(CLK_RST_CONTROLLER_RST_DEVICES_H) &= 0xFFFFFEFF;
 	usleep(20);
+	kfuse_wait_ready();
 }
 
 void clock_disable_kfuse()

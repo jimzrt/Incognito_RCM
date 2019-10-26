@@ -109,7 +109,11 @@ bool dump_keys()
 
     tsec_ctxt_t tsec_ctxt;
 
-    emummc_storage_init_mmc(&storage, &sdmmc);
+    if (!emummc_storage_init_mmc(&storage, &sdmmc))
+    {
+        EPRINTF("Unable to init MMC.");
+        return false;
+    }
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
@@ -119,6 +123,7 @@ bool dump_keys()
     if (!pkg1_id)
     {
         EPRINTF("Unknown pkg1 version.");
+        free(pkg1);
         return false;
     }
 
@@ -135,6 +140,7 @@ bool dump_keys()
     if (!found_tsec_fw)
     {
         EPRINTF("Failed to locate TSEC firmware.");
+        free(pkg1);
         return false;
     }
 

@@ -139,7 +139,6 @@ int pkg2_decompress_kip(pkg2_kip1_info_t* ki, u32 sectsToDecomp)
 	memcpy(newKip, &hdr, sizeof(hdr));
 	newKipSize = dstDataPtr-(unsigned char*)(newKip);
 
-	free(ki->kip1);
 	ki->kip1 = newKip;
 	ki->size = newKipSize;
 

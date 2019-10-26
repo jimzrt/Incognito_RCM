@@ -77,7 +77,7 @@ static int _sdmmc_set_voltage(sdmmc_t *sdmmc, u32 power)
 	{
 		pwr |= TEGRA_MMC_PWRCTL_SD_BUS_POWER;
 		sdmmc->regs->pwrcon = pwr;
-	}
+	}	
 
 	return 1;
 }
@@ -385,7 +385,7 @@ int sdmmc_get_rsp(sdmmc_t *sdmmc, u32 *rsp, u32 size, u32 type)
 
 static void _sdmmc_reset(sdmmc_t *sdmmc)
 {
-	sdmmc->regs->swrst |=
+	sdmmc->regs->swrst |= 
 		TEGRA_MMC_SWRST_SW_RESET_FOR_CMD_LINE | TEGRA_MMC_SWRST_SW_RESET_FOR_DAT_LINE;
 	_sdmmc_get_clkcon(sdmmc);
 	u32 timeout = get_tmr_ms() + 2000;
@@ -456,7 +456,7 @@ static int _sdmmc_setup_read_small_block(sdmmc_t *sdmmc)
 static int _sdmmc_parse_cmdbuf(sdmmc_t *sdmmc, sdmmc_cmd_t *cmd, bool is_data_present)
 {
 	u16 cmdflags = 0;
-
+	
 	switch (cmd->rsp_type)
 	{
 	case SDMMC_RSP_TYPE_0:
@@ -722,7 +722,7 @@ static int _sdmmc_check_mask_interrupt(sdmmc_t *sdmmc, u16 *pout, u16 mask)
 		sdmmc->regs->norintsts = norintsts & mask;
 		return SDMMC_MASKINT_MASKED;
 	}
-
+	
 	return SDMMC_MASKINT_NOERROR;
 }
 
@@ -767,7 +767,7 @@ static int _sdmmc_stop_transmission_inner(sdmmc_t *sdmmc, u32 *rsp)
 
 	if (!res)
 		return 0;
-
+	
 	_sdmmc_cache_rsp(sdmmc, rsp, 4, SDMMC_RSP_TYPE_1);
 
 	return _sdmmc_wait_prnsts_type1(sdmmc);
@@ -901,7 +901,7 @@ static int _sdmmc_execute_cmd_inner(sdmmc_t *sdmmc, sdmmc_cmd_t *cmd, sdmmc_req_
 	_sdmmc_parse_cmdbuf(sdmmc, cmd, is_data_present);
 
 	int res = _sdmmc_wait_request(sdmmc);
-	DPRINTF("rsp(%d): %08X, %08X, %08X, %08X\n", res,
+	DPRINTF("rsp(%d): %08X, %08X, %08X, %08X\n", res, 
 		sdmmc->regs->rspreg0, sdmmc->regs->rspreg1, sdmmc->regs->rspreg2, sdmmc->regs->rspreg3);
 	if (res)
 	{
@@ -943,7 +943,7 @@ static int _sdmmc_config_sdmmc1()
 	gpio_output_enable(GPIO_PORT_Z, GPIO_PIN_1, GPIO_OUTPUT_DISABLE);
 	usleep(100);
 
-	// Check if SD card is inserted.
+	// Check if SD card is inserted. 
 	if(!!gpio_read(GPIO_PORT_Z, GPIO_PIN_1))
 		return 0;
 
@@ -1055,7 +1055,7 @@ void sdmmc_end(sdmmc_t *sdmmc)
 	if (!sdmmc->clock_stopped)
 	{
 		_sdmmc_sd_clock_disable(sdmmc);
-		// Disable SDMMC power.
+		// Disable SDMMC power. 
 		_sdmmc_set_voltage(sdmmc, SDMMC_POWER_OFF);
 
 		// Disable SD card power.
@@ -1134,7 +1134,7 @@ int sdmmc_enable_low_voltage(sdmmc_t *sdmmc)
 	_sdmmc_set_voltage(sdmmc, SDMMC_POWER_1_8);
 	_sdmmc_get_clkcon(sdmmc);
 	msleep(5);
-
+	
 	if (sdmmc->regs->hostctl2 & SDHCI_CTRL_VDD_180)
 	{
 		sdmmc->regs->clkcon |= TEGRA_MMC_CLKCON_SD_CLOCK_ENABLE;

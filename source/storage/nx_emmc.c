@@ -36,7 +36,7 @@ void nx_emmc_gpt_parse(link_t *gpt, sdmmc_storage_t *storage)
 		part->lba_end = ent->lba_end;
 		part->attrs = ent->attrs;
 
-		//HACK
+		// ASCII conversion. Copy only the LSByte of the UTF-16LE name.
 		for (u32 i = 0; i < 36; i++)
 			part->name[i] = ent->name[i];
 		part->name[36] = 0;
@@ -74,6 +74,5 @@ int nx_emmc_part_write(sdmmc_storage_t *storage, emmc_part_t *part, u32 sector_o
 	// The last LBA is inclusive.
 	if (part->lba_start + sector_off > part->lba_end)
 		return 0;
-	//return sdmmc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
-	return emummc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
+	return sdmmc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
 }

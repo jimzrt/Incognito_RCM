@@ -47,7 +47,6 @@ bool emummc_load_cfg()
 	emu_cfg.file_based_part_size = 0;
 	emu_cfg.active_part = 0;
 	emu_cfg.fs_ver = 0;
-	free(emu_cfg.emummc_file_based_path);
 	emu_cfg.emummc_file_based_path = (char *)malloc(0x80);
 
 	LIST_INIT(ini_sections);

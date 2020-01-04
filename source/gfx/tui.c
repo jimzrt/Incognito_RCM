@@ -112,8 +112,9 @@ void *tui_do_menu(menu_t *menu)
 	{
 		gfx_con_setcol(0xFFCCCCCC, 1, 0xFF1B1B1B);
 		gfx_con_setpos(menu->x, menu->y);
-
 		gfx_print_header();
+		//gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
+		//	colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 
 		// Skip caption or seperator lines selection.
 		while (menu->ents[idx].type == MENT_CAPTION ||
@@ -147,13 +148,11 @@ void *tui_do_menu(menu_t *menu)
 				gfx_con_setcol(0xFF1B1B1B, 1, 0xFFCCCCCC);
 			else
 				gfx_con_setcol(0xFFCCCCCC, 1, 0xFF1B1B1B);
-			// if (menu->ents[cnt].type == MENT_CAPTION)
-			// 	gfx_printf("%k %s", menu->ents[cnt].color, menu->ents[cnt].caption);
-			if (menu->ents[cnt].type != MENT_CHGLINE) {
+			if (menu->ents[cnt].type != MENT_CHGLINE && menu->ents[cnt].type != MENT_MENU) {
 				if (cnt == idx)
 					gfx_printf(" %s", menu->ents[cnt].caption);
 				else
-					gfx_printf("%k %s", menu->ents[cnt].color, menu->ents[cnt].caption);//gfx_printf(" %s", menu->ents[cnt].caption);
+					gfx_printf("%k %s", menu->ents[cnt].color, menu->ents[cnt].caption);
 			}
 			if(menu->ents[cnt].type == MENT_MENU)
 				gfx_printf("%k...", 0xFF0099EE);

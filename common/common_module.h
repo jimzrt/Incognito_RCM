@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2018 naehrwert
+ * Common Module Header
+ * Copyright (C) 2018 M4xw
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -12,32 +13,27 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+*/
 
-#ifndef _PKG1_H_
-#define _PKG1_H_
+#pragma once
+#include <stddef.h>
+//TODO: Move it to BDK
+#include "common_gfx.h"
+#include "common_heap.h"
 
-#include "../utils/types.h"
+// Module Callback
+typedef void (*cbMainModule_t)(const char *s);
+typedef void (*memcpy_t)(void *, void *, size_t);
+typedef void (*memset_t)(void *, int, size_t);
 
-typedef struct _key_info_t
+typedef struct _bdkParams_t
 {
-	u32 start_offset;
-	u32 hks_offset;
-	bool hks_offset_is_from_end;
-	u32 alignment;
-	u32 hash_max;
-	u8 hash_order[13];
-	u32 es_offset;
-	u32 ssl_offset;
-} key_info_t;
+	gfx_con_t *gfxCon;
+	gfx_ctxt_t *gfxCtx;
+	heap_t *sharedHeap;
+	memcpy_t memcpy;
+	memset_t memset;
+} *bdkParams_t;
 
-typedef struct _pkg1_id_t
-{
-	const char *id;
-	u32 kb;
-	key_info_t key_info;
-} pkg1_id_t;
-
-const pkg1_id_t *pkg1_identify(u8 *pkg1);
-
-#endif
+// Module Entrypoint
+typedef void (*moduleEntrypoint_t)(void *, bdkParams_t);

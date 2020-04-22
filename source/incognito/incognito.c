@@ -123,9 +123,22 @@ bool dump_keys()
     if (!pkg1_id)
     {
         EPRINTF("Unknown pkg1 version.");
-        free(pkg1);
-        return false;
-    }
+		gfx_printf("%k---------------\n", COLOR_YELLOW);
+		gfx_printf("%kPress %kPOWER%k to continue and take the %kRisk\n",COLOR_GREEN,COLOR_ORANGE,COLOR_GREEN,COLOR_RED);
+		msleep(1000);
+		btn_wait_timeout(7000, BTN_POWER);
+		gfx_printf("%k---------------\n", COLOR_YELLOW);
+		if (btn_read() & BTN_POWER)
+		{
+			gfx_printf("%kGetting bis_keys...\n", COLOR_YELLOW);
+			pkg1_id = 10;
+		}else{
+			free(pkg1);
+			gfx_printf("%kCanselled\n", COLOR_YELLOW);
+			return false;
+		}
+	}
+
 
     bool found_tsec_fw = false;
     for (const u32 *pos = (const u32 *)pkg1; (u8 *)pos < pkg1 + 0x40000; pos += 0x100 / sizeof(u32))

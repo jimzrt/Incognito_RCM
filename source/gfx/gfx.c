@@ -409,7 +409,7 @@ void gfx_print_header()
 	gfx_printf("%k/___/_/ /_/\\___/\\____/\\__, /_/ /_/_/\\__/\\____/____/_/ |_|\\____/_/  /_/   \n", colors[4]);
 	gfx_printf("%k                     /____/                 /_____/                      \n", colors[4]);
 	gfx_con.fntsz = 14;
-	gfx_printf("%kv%d.%d.%d - by jimzrt%k\n\n\n\n",
+	gfx_printf("%kv%d.%d.%d - by jimzrt - s0t7x mod%k\n\n\n\n",
 			   colors[4], LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 	gfx_con.fntsz = prevFontSize;
 }

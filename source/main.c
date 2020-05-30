@@ -34,6 +34,7 @@
 #include "storage/emummc.h"
 #include "storage/nx_emmc.h"
 #include "storage/sdmmc.h"
+#include "storage/sdmmc_driver.h"
 #include "utils/btn.h"
 #include "utils/dirlist.h"
 #include "utils/sprintf.h"
@@ -56,7 +57,7 @@ bool sd_mount()
 	if (sd_mounted)
 		return true;
 
-	if (!sdmmc_storage_init_sd(&sd_storage, &sd_sdmmc, SDMMC_1, SDMMC_BUS_WIDTH_4, 11))
+	if (!sdmmc_storage_init_sd(&sd_storage, &sd_sdmmc, SDMMC_BUS_WIDTH_4, SDHCI_TIMING_UHS_SDR104))
 	{
 		EPRINTF("Failed to init SD card.\nMake sure that it is inserted.\nOr that SD reader is properly seated!");
 	}

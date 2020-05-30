@@ -20,6 +20,7 @@
 #include "../gfx/di.h"
 #include "../gfx/gfx.h"
 #include "../gfx/tui.h"
+#include "../hos/hos.h"
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"

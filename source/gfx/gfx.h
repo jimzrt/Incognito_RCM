@@ -37,6 +37,7 @@ void gfx_con_setpos(u32 x, u32 y);
 void gfx_putc(char c);
 void gfx_puts(const char *s);
 void gfx_printf(const char *fmt, ...);
+void gfx_print_header();
 void gfx_hexdump(u32 base, const u8 *buf, u32 len);
 
 void gfx_set_pixel(u32 x, u32 y, u32 color);

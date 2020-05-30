@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 shchmue
+ * Copyright (c) 2019-2020 shchmue
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -40,15 +40,16 @@ extern emmc_part_t *system_part;
 typedef struct {
     u32 sector;
     u32 visit_count;
+    u8  align[8];
     u8  tweak[0x10];
     u8  cached_sector[0x200];
-    u8  align[8];
 } sector_cache_t;
 
-#define MAX_SEC_CACHE_ENTRIES 64
-static sector_cache_t *sector_cache = NULL;
-static u32 secindex = 0;
+#define MAX_SEC_CACHE_ENTRIES 256
+static sector_cache_t *sector_cache = (sector_cache_t *)(MIXD_BUF_ALIGNED + 0x100000); //NULL;
+u32 secindex = 0;
 bool clear_sector_cache = false;
+bool lock_sector_cache = false;
 
 DSTATUS disk_status (
     BYTE pdrv /* Physical drive number to identify the drive */
@@ -80,8 +81,10 @@ static inline void _gf256_mul_x_le(void *block) {
 
 static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u64 sec, void *dst, void *src, u32 secsize) {
     int res = 0;
-    u8 *pdst = (u8 *)dst;
-    u8 *psrc = (u8 *)src;
+    u8 *temptweak = (u8 *)malloc(0x10);
+	u32 *pdst = (u32 *)dst;
+    u32 *psrc = (u32 *)src;
+    u32 *ptweak = (u32 *)tweak;
 
     if (regen_tweak) {
         for (int i = 0xF; i >= 0; i--) {
@@ -95,34 +98,33 @@ static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_twe
     for (u32 i = 0; i < tweak_exp * 0x20; i++)
         _gf256_mul_x_le(tweak);
 
-    u8 temptweak[0x10];
     memcpy(temptweak, tweak, 0x10);
 
     //We are assuming a 0x10-aligned sector size in this implementation.
     for (u32 i = 0; i < secsize / 0x10; i++) {
-        for (u32 j = 0; j < 0x10; j++)
-            pdst[j] = psrc[j] ^ tweak[j];
+        for (u32 j = 0; j < 4; j++)
+            pdst[j] = psrc[j] ^ ptweak[j];
         _gf256_mul_x_le(tweak);
-        psrc += 0x10;
-        pdst += 0x10;
+        psrc += 4;
+        pdst += 4;
     }
 
-    se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
+    se_aes_crypt_ecb(ks2, enc, dst, secsize, dst, secsize);
 
-    pdst = (u8 *)dst;
+    pdst = (u32 *)dst;
 
     memcpy(tweak, temptweak, 0x10);
     for (u32 i = 0; i < secsize / 0x10; i++) {
-        for (u32 j = 0; j < 0x10; j++)
-            pdst[j] = pdst[j] ^ tweak[j];
+        for (u32 j = 0; j < 4; j++)
+            pdst[j] = pdst[j] ^ ptweak[j];
         _gf256_mul_x_le(tweak);
-        pdst += 0x10;
+        pdst += 4;
     }
-
 
     res = 1;
 
 out:;
+    free(temptweak);
     return res;
 }
 
@@ -153,14 +155,14 @@ DRESULT disk_read (
         bool needs_cache_sector = false;
 
         if (secindex == 0 || clear_sector_cache) {
-            if (!sector_cache)
-                sector_cache = (sector_cache_t *)malloc(sizeof(sector_cache_t) * MAX_SEC_CACHE_ENTRIES);
             clear_sector_cache = false;
+            lock_sector_cache = false;
             secindex = 0;
         }
 
         u32 s = 0;
-        if (count == 1) {
+        // only attempt to cache single-sector reads as these are most likely to be repeated (eg. rereading FAT)
+        if (!lock_sector_cache && count == 1) {
             for ( ; s < secindex; s++) {
                 if (sector_cache[s].sector == sector) {
                     sector_cache[s].visit_count++;

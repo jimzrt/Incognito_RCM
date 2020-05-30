@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2018 naehrwert
+ * Copyright (c) 2018-2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -14,16 +15,31 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _SDRAM_H_
-#define _SDRAM_H_
+#ifndef NX_SD_H
+#define NX_SD_H
 
-#include "emc.h"
-#include "sdram_param_t210.h"
+#include "sdmmc.h"
+#include "sdmmc_driver.h"
+#include "../libs/fatfs/ff.h"
 
-void sdram_init();
-sdram_params_t *sdram_get_params();
-sdram_params_t *sdram_get_params_patched();
-void sdram_lp0_save_params(const void *params);
-emc_mr_data_t sdram_read_mrx(emc_mr_t mrx);
+enum
+{
+	SD_INIT_FAIL  = 0,
+	SD_1BIT_HS25  = 1,
+	SD_4BIT_HS25  = 2,
+	SD_UHS_SDR82  = 3,
+};
+
+extern sdmmc_t sd_sdmmc;
+extern sdmmc_storage_t sd_storage;
+extern FATFS sd_fs;
+
+u32  sd_get_mode();
+int  sd_init_retry(bool power_cycle);
+bool sd_initialize(bool power_cycle);
+bool sd_mount();
+void sd_unmount();
+void *sd_file_read(const char *path, u32 *fsize);
+int  sd_save_to_file(void *buf, u32 size, const char *filename);
 
 #endif

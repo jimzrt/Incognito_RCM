@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (C) 2018-2019 CTCaer
- * Copyright (C) 2018 M4xw
+ * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2018 M4xw
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -37,11 +37,8 @@ void gfx_con_setpos(u32 x, u32 y);
 void gfx_putc(char c);
 void gfx_puts(const char *s);
 void gfx_printf(const char *fmt, ...);
-void gfx_print_header();
-#ifdef DEBUG
 void gfx_hexdump(u32 base, const u8 *buf, u32 len);
-u8 *gfx_bmp_screenshot(u32 *size);
-#endif
+
 void gfx_set_pixel(u32 x, u32 y, u32 color);
 void gfx_line(int x0, int y0, int x1, int y1, u32 color);
 void gfx_put_small_sep();
@@ -52,7 +49,7 @@ void gfx_set_rect_argb(const u32 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 po
 void gfx_render_bmp_argb(const u32 *buf, u32 size_x, u32 size_y, u32 pos_x, u32 pos_y);
 
 // Global gfx console and context.
-gfx_ctxt_t gfx_ctxt;
-gfx_con_t gfx_con;
+extern gfx_ctxt_t gfx_ctxt;
+extern gfx_con_t gfx_con;
 
 #endif

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (C) 2018-2019 CTCaer
+ * Copyright (c) 2018-2020 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -44,7 +44,8 @@ static char *_strdup(char *str)
 u32 _find_section_name(char *lbuf, u32 lblen, char schar)
 {
 	u32 i;
-	for (i = 0; i < lblen  && lbuf[i] != schar && lbuf[i] != '\n' && lbuf[i] != '\r'; i++)
+	// Depends on 'FF_USE_STRFUNC 2' that removes \r.
+	for (i = 0; i < lblen  && lbuf[i] != schar && lbuf[i] != '\n'; i++)
 		;
 	lbuf[i] = 0;
 
@@ -54,12 +55,9 @@ u32 _find_section_name(char *lbuf, u32 lblen, char schar)
 ini_sec_t *_ini_create_section(link_t *dst, ini_sec_t *csec, char *name, u8 type)
 {
 	if (csec)
-	{
 		list_append(dst, &csec->link);
-		csec = NULL;
-	}
 
-	csec = (ini_sec_t *)malloc(sizeof(ini_sec_t));
+	csec = (ini_sec_t *)calloc(sizeof(ini_sec_t), 1);
 	csec->name = _strdup(name);
 	csec->type = type;
 
@@ -78,7 +76,7 @@ int ini_parse(link_t *dst, char *ini_path, bool is_dir)
 
 	char *filename = (char *)malloc(256);
 
-	memcpy(filename, ini_path, pathlen + 1);
+	strcpy(filename, ini_path);
 
 	// Get all ini filenames.
 	if (is_dir)
@@ -89,7 +87,7 @@ int ini_parse(link_t *dst, char *ini_path, bool is_dir)
 			free(filename);
 			return 0;
 		}
-		memcpy(filename + pathlen, "/", 2);
+		strcpy(filename + pathlen, "/");
 		pathlen++;
 	}
 
@@ -100,7 +98,7 @@ int ini_parse(link_t *dst, char *ini_path, bool is_dir)
 		{
 			if (filelist[k * 256])
 			{
-				memcpy(filename + pathlen, &filelist[k * 256], strlen(&filelist[k * 256]) + 1);
+				strcpy(filename + pathlen, &filelist[k * 256]);
 				k++;
 			}
 			else
@@ -123,8 +121,8 @@ int ini_parse(link_t *dst, char *ini_path, bool is_dir)
 			f_gets(lbuf, 512, &fp);
 			lblen = strlen(lbuf);
 
-			// Remove trailing newline.
-			if (lbuf[lblen - 1] == '\n' || lbuf[lblen - 1] == '\r')
+			// Remove trailing newline. Depends on 'FF_USE_STRFUNC 2' that removes \r.
+			if (lblen && lbuf[lblen - 1] == '\n')
 				lbuf[lblen - 1] = 0;
 
 			if (lblen > 2 && lbuf[0] == '[') // Create new section.
@@ -134,28 +132,26 @@ int ini_parse(link_t *dst, char *ini_path, bool is_dir)
 				csec = _ini_create_section(dst, csec, &lbuf[1], INI_CHOICE);
 				list_init(&csec->kvs);
 			}
-			else if (lblen > 2 && lbuf[0] == '{') //Create new caption.
+			else if (lblen > 1 && lbuf[0] == '{') // Create new caption. Support empty caption '{}'.
 			{
 				_find_section_name(lbuf, lblen, '}');
 
 				csec = _ini_create_section(dst, csec, &lbuf[1], INI_CAPTION);
 				csec->color = 0xFF0AB9E6;
 			}
-			else if (lblen > 2 && lbuf[0] == '#') //Create empty lines and comments.
+			else if (lblen > 2 && lbuf[0] == '#') // Create comment.
 			{
-				_find_section_name(lbuf, lblen, '\0');
-
 				csec = _ini_create_section(dst, csec, &lbuf[1], INI_COMMENT);
 			}
-			else if (lblen < 2)
+			else if (lblen < 2) // Create empty line.
 			{
 				csec = _ini_create_section(dst, csec, NULL, INI_NEWLINE);
 			}
-			else if (csec && csec->type == INI_CHOICE) //Extract key/value.
+			else if (csec && csec->type == INI_CHOICE) // Extract key/value.
 			{
 				u32 i = _find_section_name(lbuf, lblen, '=');
 
-				ini_kv_t *kv = (ini_kv_t *)malloc(sizeof(ini_kv_t));
+				ini_kv_t *kv = (ini_kv_t *)calloc(sizeof(ini_kv_t), 1);
 				kv->key = _strdup(&lbuf[0]);
 				kv->val = _strdup(&lbuf[i + 1]);
 				list_append(&csec->kvs, &kv->link);

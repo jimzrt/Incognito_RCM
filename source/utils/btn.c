@@ -34,6 +34,16 @@ u8 btn_read()
 	return res;
 }
 
+u8 btn_read_vol()
+{
+	u8 res = 0;
+	if (!gpio_read(GPIO_PORT_X, GPIO_PIN_7))
+		res |= BTN_VOL_DOWN;
+	if (!gpio_read(GPIO_PORT_X, GPIO_PIN_6))
+		res |= BTN_VOL_UP;
+	return res;
+}
+
 u8 btn_wait()
 {
 	u8 res = 0, btn = btn_read();
@@ -81,5 +91,8 @@ u8 btn_wait_timeout(u32 time_ms, u8 mask)
 	};
 
 	// Timed out.
-	return 0;
+	if (!single_button || !time_ms)
+		return (res & mask);
+	else
+		return 0; // Return no button press if single button requested.
 }

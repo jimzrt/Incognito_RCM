@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 CTCaer
+ * Copyright (c) 2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -24,17 +24,12 @@
 #include "../gfx/gfx.h"
 #include "../libs/fatfs/ff.h"
 #include "../mem/heap.h"
+#include "../storage/nx_sd.h"
 #include "../utils/list.h"
 #include "../utils/types.h"
 
-extern sdmmc_t sd_sdmmc;
-extern sdmmc_storage_t sd_storage;
-extern FATFS sd_fs;
-
 extern hekate_config h_cfg;
-
-extern bool sd_mount();
-extern void sd_unmount();
+emummc_cfg_t emu_cfg;
 
 bool emummc_load_cfg()
 {
@@ -47,7 +42,8 @@ bool emummc_load_cfg()
 	emu_cfg.file_based_part_size = 0;
 	emu_cfg.active_part = 0;
 	emu_cfg.fs_ver = 0;
-	emu_cfg.emummc_file_based_path = (char *)malloc(0x80);
+	if (!emu_cfg.emummc_file_based_path)
+		emu_cfg.emummc_file_based_path = (char *)malloc(0x80);
 
 	LIST_INIT(ini_sections);
 	if (ini_parse(&ini_sections, "emuMMC/emummc.ini", false))
@@ -94,18 +90,14 @@ static int emummc_raw_get_part_off(int part_idx)
 	return 2;
 }
 
-
 int emummc_storage_init_mmc(sdmmc_storage_t *storage, sdmmc_t *sdmmc)
 {
 	FILINFO fno;
-	if (!sdmmc_storage_init_mmc(storage, sdmmc, SDMMC_4, SDMMC_BUS_WIDTH_8, 4))
-	{
-		EPRINTF("Failed to init eMMC.");
+	if (!sdmmc_storage_init_mmc(storage, sdmmc, SDMMC_BUS_WIDTH_8, SDHCI_TIMING_MMC_HS400))
+		return 2;
 
-		goto out;
-	}
 	if (h_cfg.emummc_force_disable)
-		return 1;
+		return 0;
 
 	emu_cfg.active_part = 0;
 	if (!sd_mount())
@@ -131,10 +123,11 @@ int emummc_storage_init_mmc(sdmmc_storage_t *storage, sdmmc_t *sdmmc)
 		}
 		emu_cfg.file_based_part_size = fno.fsize >> 9;
 	}
-	return 1;
+
+	return 0;
 
 out:
-	return 0;
+	return 1;
 }
 
 int emummc_storage_end(sdmmc_storage_t *storage)

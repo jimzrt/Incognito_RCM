@@ -18,6 +18,7 @@
 
 #include <string.h>
 
+#include "../hos/hos.h"
 #include "../sec/tsec.h"
 #include "../sec/tsec_t210.h"
 #include "../sec/se_t210.h"

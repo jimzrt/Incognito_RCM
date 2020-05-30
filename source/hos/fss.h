@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018 naehrwert
+ * Copyright (c) 2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -14,16 +14,21 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef _SDRAM_H_
-#define _SDRAM_H_
+#ifndef _FSS_H_
+#define _FSS_H_
 
-#include "emc.h"
-#include "sdram_param_t210.h"
+#include "hos.h"
 
-void sdram_init();
-sdram_params_t *sdram_get_params();
-sdram_params_t *sdram_get_params_patched();
-void sdram_lp0_save_params(const void *params);
-emc_mr_data_t sdram_read_mrx(emc_mr_t mrx);
+typedef struct _fss0_sept_t
+{
+	u32 kb;
+	ini_sec_t *cfg_sec;
+	void *sept_primary;
+	void *sept_secondary;
+
+} fss0_sept_t;
+
+int parse_fss(launch_ctxt_t *ctxt, const char *path, fss0_sept_t *sept_ctxt);
+int load_sept_from_ffs0(fss0_sept_t *sept_ctxt);
 
 #endif

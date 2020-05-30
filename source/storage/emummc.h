@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 CTCaer
+ * Copyright (c) 2019 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -47,7 +47,7 @@ typedef struct _emummc_cfg_t
 	int fs_ver;
 } emummc_cfg_t;
 
-emummc_cfg_t emu_cfg;
+extern emummc_cfg_t emu_cfg;
 
 bool emummc_load_cfg();
 int emummc_storage_init_mmc(sdmmc_storage_t *storage, sdmmc_t *sdmmc);

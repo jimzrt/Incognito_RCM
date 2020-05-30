@@ -4,7 +4,7 @@
  *
  * Copyright (c) 2011 Samsung Electronics
  * MyungJoo Ham <myungjoo.ham@samsung.com>
- * Copyright (c) 2018 CTCaer
+ * Copyright (c) 2018-2020 CTCaer
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,8 @@
 
 #ifndef __MAX17050_H_
 #define __MAX17050_H_
+
+#include "../utils/types.h"
 
 #define MAX17050_STATUS_BattAbsent    (1 << 3)
 #define MAX17050_DEFAULT_SNS_RESISTOR 10000
@@ -96,14 +98,17 @@ enum MAX17050_reg {
 	MAX17050_K_empty0	= 0x3B,
 	MAX17050_TaskPeriod	= 0x3C,
 	MAX17050_FSTAT		= 0x3D,
-
+	MAX17050_TIMER		= 0x3E,
 	MAX17050_SHDNTIMER	= 0x3F,
+
 	MAX17050_QRTbl30	= 0x42,
+
 	MAX17050_dQacc		= 0x45,
 	MAX17050_dPacc		= 0x46,
 
 	MAX17050_VFSOC0		= 0x48,
 
+	Max17050_QH0		= 0x4C,
 	MAX17050_QH			= 0x4D,
 	MAX17050_QL			= 0x4E,
 
@@ -111,6 +116,8 @@ enum MAX17050_reg {
 	MAX17050_MaxVolt	= 0x51, // Custom ID. Not to be sent to i2c.
 
 	MAX17050_VFSOC0Enable	= 0x60,
+	MAX17050_MODELEnable1	= 0x62,
+	MAX17050_MODELEnable2	= 0x63,
 
 	MAX17050_MODELChrTbl	= 0x80,
 
@@ -123,5 +130,6 @@ enum MAX17050_reg {
 
 int max17050_get_property(enum MAX17050_reg reg, int *value);
 int max17050_fix_configuration();
+u32 max17050_get_cached_batt_volt();
 
 #endif /* __MAX17050_H_ */

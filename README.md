@@ -1,4 +1,4 @@
-Incognito_RCM
+Incognito_RCM (patched)
 =
 Incognito_RCM is a bare metal Nintendo Switch payload that derives encryption keys for de- and encrypting PRODINFO partition (sysnand and emummc) and wiping personal information from your Nintendo Switch as to go online while worrying slightly less about a ban.
 It has a builtin backup and restore functionality.

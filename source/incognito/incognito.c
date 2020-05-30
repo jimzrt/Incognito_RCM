@@ -110,7 +110,7 @@ bool dump_keys()
 
     tsec_ctxt_t tsec_ctxt;
 
-    if (!emummc_storage_init_mmc(&storage, &sdmmc))
+    if (emummc_storage_init_mmc(&storage, &sdmmc) == 2)
     {
         EPRINTF("Unable to init MMC.");
         return false;
@@ -123,7 +123,7 @@ bool dump_keys()
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id)
     {
-        EPRINTF("Unknown pkg1 version.");
+        EPRINTF("Unknown pkg1 version.\n Make sure you have the latest Incognito_RCM.\n If a new firmware version just came out,\n Incognito_RCM must be updated.\n Check Github for new release.");
         free(pkg1);
         return false;
     }

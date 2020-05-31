@@ -149,11 +149,20 @@ bool prodinfo_write(
     if(!_emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200)){
         return false;
     }
-    if (nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff))
+    if (nx_emummc_part_write(&storage, prodinfo_part, sector, count, buff))
     {
         prev_sector = sector + count - 1;
         return true;
     }
 
     return false;
+}
+
+// replacement for nx_emmc_part_write in storage/nx_emmc, which uses sdmmc_storage_write
+int nx_emummc_part_write(sdmmc_storage_t *storage, emmc_part_t *part, u32 sector_off, u32 num_sectors, void *buf)
+{
+	// The last LBA is inclusive.
+	if (part->lba_start + sector_off > part->lba_end)
+		return 0;
+	return emummc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
 }

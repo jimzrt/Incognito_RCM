@@ -96,6 +96,29 @@ LIST_INIT(gpt);
 static bool _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed);
 
+unsigned int crc_16_table[16] = {
+    0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
+    0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400 };
+
+unsigned short int get_crc_16 (const char *p, int n) {
+    unsigned short int crc = 0x55AA;
+    int r;
+
+    while (n-- > 0) {
+        r = crc_16_table[crc & 0xF];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ r ^ crc_16_table[*p & 0xF];
+
+        r = crc_16_table[crc & 0xF];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ r ^ crc_16_table[(*p >> 4) & 0xF];
+
+        p++;
+    }
+
+    return(crc);
+}
+
 bool dump_keys()
 {
     display_backlight_brightness(100, 1000);
@@ -307,17 +330,33 @@ bool dump_keys()
         return false;
     }
 
-    char serial[15] = "";
-    readData((u8 *)serial, 0x250, 14, NULL);
+    char serial[31] = "";
+    readData((u8 *)serial, 0x250, 30, NULL);
 
-    gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
+    gfx_printf("%kCurrent serial: [%s]\n\n", COLOR_BLUE, serial);
+
+    // Determine stored crc
+    u8 *storedCrc = (u8 *)calloc(2, sizeof(u8));
+    readData((u8 *)storedCrc, 0x250 + 30, 2, NULL);
+
+    // Calculate crc
+    const char *serialBytes = serial;
+    u16 crcValue = get_crc_16(serialBytes, 30);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+
+    // Validate crc
+    if (memcmp(storedCrc, crc, 0x2) == 0)
+        gfx_printf("%kValid serial crc\n", COLOR_GREEN);
+    else
+        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
+   
+    free(storedCrc);
 
     return true;
 }
 
 bool erase(u32 offset, u32 length)
 {
-
     u8 *tmp = (u8 *)calloc(length, sizeof(u8));
     bool result = writeData(tmp, offset, length, NULL);
     free(tmp);
@@ -336,7 +375,21 @@ bool writeSerial()
         junkSerial = "XAW00000000001";
     }
 
-    return writeData((u8 *)junkSerial, 0x250, 14, NULL);
+    const u32 serialOffset = 0x250;
+    const u32 serialBlockSize = 0x1E;
+
+    if (!writeData((u8 *)junkSerial, serialOffset, 14, NULL))
+        return false;
+
+    // write crc at end of serial-number block
+    char serial[31] = "";
+    readData((u8 *)serial, serialOffset, serialBlockSize, NULL);
+
+    const char *serialBytes = serial;
+    u16 crcValue = get_crc_16(serialBytes, serialBlockSize);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+  
+    return writeData(crc, serialOffset + serialBlockSize, 2, NULL);
 }
 
 bool incognito()

@@ -9,6 +9,10 @@ Massive Thanks to CTCaer, shchmue and blawar!
 
 This project is in early stage, so have a nand backup!!
 
+Patch note
+=
+*Scandal-UK: I have maintained this project with code from projects by CTCaer and schmue. I take no credit for the code - I have just updated it where necessary so that it builds with the latest tools, has the improvements made in Hekate and works with the latest firmware as intended. Report any issues or contact me on GBATemp (scandal_uk).*
+
 Usage
 =
 * Launch Incoginito_RCM.bin using your favorite payload injector

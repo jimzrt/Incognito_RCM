@@ -2,6 +2,7 @@
 
 #include "../../storage/sdmmc.h"
 #include "../../storage/nx_emmc.h"
+#include "../../storage/emummc.h"
 
 #include <string.h>
 #include "../../sec/se.h"

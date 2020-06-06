@@ -402,36 +402,36 @@ bool incognito()
             return false;
     }
 
-    gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting fake serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-
-    gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
-    if (!erase(0x0AE0, 0x800)) // client cert
+/*  // NOTE: This is crashing Atmosphere...
+    gfx_printf("%kErasing ECC-B233 device cert...\n", COLOR_YELLOW);
+    if (!erase(0x0480, 0x180)) // (size 0x190 to include crc)
+        return false;
+*/
+    gfx_printf("%kErasing SSL cert...\n", COLOR_YELLOW);
+    if (!erase(0x0AE0, 0x800))
         return false;
 
-    gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
-    if (!erase(0x3AE0, 0x130)) // private key
+    gfx_printf("%kErasing extended SSL key...\n", COLOR_YELLOW);
+    if (!erase(0x3AE0, 0x130))
         return false;
 
-    gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x35E1, 0x006)) // deviceId
+    gfx_printf("%kErasing Amiibo ECDSA cert...\n", COLOR_YELLOW);
+    if (!erase(0x35A0, 0x070))
         return false;
 
-    gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x36E1, 0x006)) // deviceId
+    gfx_printf("%kErasing Amiibo ECQV-BLS root cert...\n", COLOR_YELLOW);
+    if (!erase(0x36A0, 0x090))
         return false;
 
-    gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x02B0, 0x180)) // device cert
+    gfx_printf("%kErasing RSA-2048 extended device key...\n", COLOR_YELLOW);
+    if (!erase(0x3D70, 0x240))
         return false;
 
-    gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x3D70, 0x240)) // device cert
-        return false;
-
-    gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
-    if (!erase(0x3FC0, 0x240)) // device key
+    gfx_printf("%kErasing RSA-2048 device certificate...\n", COLOR_YELLOW);
+    if (!erase(0x3FC0, 0x240))
         return false;
 
     gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);

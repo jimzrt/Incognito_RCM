@@ -119,6 +119,32 @@ unsigned short int get_crc_16 (const char *p, int n) {
     return(crc);
 }
 
+u16 calculateCrc(u32 offset, u32 size)
+{
+    const char buffer[size + 1];
+    readData((u8 *)buffer, offset, size, NULL);
+    return get_crc_16(buffer, size);
+}
+
+u16 readCrc(u32 offset)
+{
+    u16 buffer;
+    readData((u8 *)&buffer, offset, sizeof(u16), NULL);
+    return buffer;
+}
+
+bool validateCrc(u32 offset, u32 size)
+{
+    return calculateCrc(offset, size) == readCrc(offset + size);
+}
+
+bool calculateAndWriteCrc(u32 offset, u32 size)
+{
+    u16 crcValue = calculateCrc(offset, size);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+    return writeData(crc, offset + size, sizeof(u16), NULL);
+}
+
 bool dump_keys()
 {
     display_backlight_brightness(100, 1000);
@@ -330,27 +356,17 @@ bool dump_keys()
         return false;
     }
 
-    char serial[31] = "";
-    readData((u8 *)serial, 0x250, 30, NULL);
+    u32 serialOffset = 0x250;
+
+    char serial[15];
+    readData((u8 *)serial, serialOffset, 14, NULL);
 
     gfx_printf("%kCurrent serial: [%s]\n\n", COLOR_BLUE, serial);
 
-    // Determine stored crc
-    u8 *storedCrc = (u8 *)calloc(2, sizeof(u8));
-    readData((u8 *)storedCrc, 0x250 + 30, 2, NULL);
-
-    // Calculate crc
-    const char *serialBytes = serial;
-    u16 crcValue = get_crc_16(serialBytes, 30);
-    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
-
-    // Validate crc
-    if (memcmp(storedCrc, crc, 0x2) == 0)
-        gfx_printf("%kValid serial crc\n", COLOR_GREEN);
+    if (validateCrc(serialOffset, 0x1E))
+        gfx_printf("%kValid serial checksum\n", COLOR_GREEN);
     else
-        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
-   
-    free(storedCrc);
+        gfx_printf("%kWarning - invalid serial checksum\n", COLOR_RED);
 
     return true;
 }
@@ -380,24 +396,9 @@ bool writeSerial()
         return false;
 
     // write crc at end of serial-number block
-    return writeCrc(serialOffset, 0x1E);
+    return calculateAndWriteCrc(serialOffset, 0x1E);
 }
 
-bool writeCrc(u32 offset, u32 size)
-{
-    char buffer[size + 1];
-    if (!readData((u8 *)buffer, offset, size, NULL))
-        return false;
-    
-    const char *bytes = buffer;
-    free(buffer);
-    u16 crcValue = get_crc_16(bytes, size);
-    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
-  
-    return writeData(crc, offset + size, 2, NULL);
-}
-
-// todo: write a method to add a crc!
 // todo: include crc block in sizes
 bool incognito()
 {
@@ -412,11 +413,14 @@ bool incognito()
     gfx_printf("%kWriting fake serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-/*  // NOTE: This is crashing Atmosphere...
+/*
     gfx_printf("%kErasing ECC-B233 device cert...\n", COLOR_YELLOW);
     if (!erase(0x0480, 0x180)) // (size 0x190 to include crc)
         return false;
 */
+//  if (!writeCrc(0x0480, 0x180)) // whatever I do it crashes Atmos..!
+//      return false;
+
     gfx_printf("%kErasing SSL cert...\n", COLOR_YELLOW);
     if (!erase(0x0AE0, 0x800))
         return false;
@@ -441,11 +445,11 @@ bool incognito()
     if (!erase(0x3FC0, 0x240))
         return false;
 
-    gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting SSL cert hash...\n", COLOR_YELLOW);
     if (!writeClientCertHash())
         return false;
 
-    gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting body hash...\n", COLOR_YELLOW);
     if (!writeCal0Hash())
         return false;
 
@@ -992,6 +996,11 @@ bool restoreProdinfo()
                    COLOR_RED);
         goto out;
     }
+
+    if (validateCrc(0x250, 0x1E))
+        gfx_printf("%kValid serial checksum\n", COLOR_GREEN);
+    else
+        gfx_printf("%kWarning - invalid serial checksum\n", COLOR_RED);
 
     result = true;
     gfx_printf("\n%kRestore from %s done!\n\n", COLOR_GREEN, name);

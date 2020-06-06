@@ -376,22 +376,29 @@ bool writeSerial()
     }
 
     const u32 serialOffset = 0x250;
-    const u32 serialBlockSize = 0x1E;
-
     if (!writeData((u8 *)junkSerial, serialOffset, 14, NULL))
         return false;
 
     // write crc at end of serial-number block
-    char serial[31] = "";
-    readData((u8 *)serial, serialOffset, serialBlockSize, NULL);
-
-    const char *serialBytes = serial;
-    u16 crcValue = get_crc_16(serialBytes, serialBlockSize);
-    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
-  
-    return writeData(crc, serialOffset + serialBlockSize, 2, NULL);
+    return writeCrc(serialOffset, 0x1E);
 }
 
+bool writeCrc(u32 offset, u32 size)
+{
+    char buffer[size + 1];
+    if (!readData((u8 *)buffer, offset, size, NULL))
+        return false;
+    
+    const char *bytes = buffer;
+    free(buffer);
+    u16 crcValue = get_crc_16(bytes, size);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+  
+    return writeData(crc, offset + size, 2, NULL);
+}
+
+// todo: write a method to add a crc!
+// todo: include crc block in sizes
 bool incognito()
 {
     gfx_printf("%kChecking if backup exists...\n", COLOR_YELLOW);

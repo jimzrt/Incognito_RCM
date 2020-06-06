@@ -77,6 +77,14 @@ out:;
     return res;
 }
 
+// replacement for nx_emmc_part_write in storage/nx_emmc, which uses sdmmc_storage_write
+int nx_emummc_part_write(sdmmc_storage_t *storage, emmc_part_t *part, u32 sector_off, u32 num_sectors, void *buf)
+{
+	// The last LBA is inclusive.
+	if (part->lba_start + sector_off > part->lba_end)
+		return 0;
+	return emummc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
+}
 
 bool prodinfo_read(
     u8 *buff,   /* Data buffer to store read data */
@@ -156,13 +164,4 @@ bool prodinfo_write(
     }
 
     return false;
-}
-
-// replacement for nx_emmc_part_write in storage/nx_emmc, which uses sdmmc_storage_write
-int nx_emummc_part_write(sdmmc_storage_t *storage, emmc_part_t *part, u32 sector_off, u32 num_sectors, void *buf)
-{
-	// The last LBA is inclusive.
-	if (part->lba_start + sector_off > part->lba_end)
-		return 0;
-	return emummc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
 }

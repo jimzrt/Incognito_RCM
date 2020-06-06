@@ -156,19 +156,19 @@ bool calculateAndWriteCrc(u32 offset, u32 size)
 void validateChecksums(u8 *blob)
 {
     if (!validateCrc(0x0250, 0x1E, blob))
-        gfx_printf("%kWarning - invalid serial number checksum\n", COLOR_GREEN);
+        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
 
     if (!validateCrc(0x0480, 0x18E, blob))
-        gfx_printf("%kWarning - invalid ECC-B233 device cert checksum...\n", COLOR_RED);
+        gfx_printf("%kWarning - invalid ECC-B233 crc...\n", COLOR_RED);
 
     if (!validateCrc(0x3AE0, 0x13E, blob))
-        gfx_printf("%kWarning - invalid extended SSL key checksum...\n", COLOR_RED);
+        gfx_printf("%kWarning - invalid ext SSL key crc...\n", COLOR_RED);
 
     if (!validateCrc(0x35A0, 0x07E, blob))
-        gfx_printf("%kWarning - invalid Amiibo ECDSA cert checksum...\n", COLOR_RED);
+        gfx_printf("%kWarning - invalid ECDSA cert crc...\n", COLOR_RED);
 
     if (!validateCrc(0x36A0, 0x09E, blob))
-        gfx_printf("%kWarning - invalid Amiibo ECQV-BLS root cert checksum...\n", COLOR_RED);
+        gfx_printf("%kWarning - invalid ECQV-BLS cert crc...\n", COLOR_RED);
 }
 
 bool dump_keys()
@@ -382,17 +382,10 @@ bool dump_keys()
         return false;
     }
 
-    u32 serialOffset = 0x250;
-
     char serial[15];
-    readData((u8 *)serial, serialOffset, 14, NULL);
+    readData((u8 *)serial, 0x250, 14, NULL);
 
     gfx_printf("%kCurrent serial: [%s]\n\n", COLOR_BLUE, serial);
-
-    if (validateCrc(serialOffset, 0x1E, NULL))
-        gfx_printf("%kValid serial checksum\n", COLOR_GREEN);
-    else
-        gfx_printf("%kWarning - invalid serial checksum\n", COLOR_RED);
 
     return true;
 }
@@ -424,7 +417,6 @@ bool writeSerial()
     return calculateAndWriteCrc(serialOffset, 0x1E);
 }
 
-// todo: include crc block in sizes
 bool incognito()
 {
     gfx_printf("%kChecking if backup exists...\n", COLOR_YELLOW);
@@ -477,11 +469,11 @@ bool incognito()
         return false;
 
     gfx_printf("%kErasing RSA-2048 extended device key...\n", COLOR_YELLOW);
-    if (!erase(0x3D70, 0x240)) // seems empty & unused...
+    if (!erase(0x3D70, 0x240)) // seems empty & unused!
         return false;
 
     gfx_printf("%kErasing RSA-2048 device certificate...\n", COLOR_YELLOW);
-    if (!erase(0x3FC0, 0x240)) // seems empty & unused...
+    if (!erase(0x3FC0, 0x240)) // seems empty & unused!
         return false;
 
     gfx_printf("%kWriting SSL cert hash...\n", COLOR_YELLOW);

@@ -119,6 +119,58 @@ unsigned short int get_crc_16 (const char *p, int n) {
     return(crc);
 }
 
+u16 calculateCrc(u32 offset, u32 size, u8 *blob)
+{
+    const char buffer[size + 1];
+    if (blob == NULL)
+        readData((u8 *)buffer, offset, size, NULL);
+    else
+        memcpy((u8 *)buffer, blob + offset, size);
+
+    return get_crc_16(buffer, size);
+}
+
+u16 readCrc(u32 offset, u8 *blob)
+{
+    u16 buffer;
+    if (blob == NULL)
+        readData((u8 *)&buffer, offset, sizeof(u16), NULL);
+    else
+        memcpy((u8 *)&buffer, blob + offset, sizeof(u16));
+    
+    return buffer;
+}
+
+bool validateCrc(u32 offset, u32 size, u8 *blob)
+{
+    return calculateCrc(offset, size, blob) == readCrc(offset + size, blob);
+}
+
+bool calculateAndWriteCrc(u32 offset, u32 size)
+{
+    u16 crcValue = calculateCrc(offset, size, NULL);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+    return writeData(crc, offset + size, sizeof(u16), NULL);
+}
+
+void validateChecksums(u8 *blob)
+{
+    if (!validateCrc(0x0250, 0x1E, blob))
+        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
+
+    if (!validateCrc(0x0480, 0x18E, blob))
+        gfx_printf("%kWarning - invalid ECC-B233 crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x3AE0, 0x13E, blob))
+        gfx_printf("%kWarning - invalid ext SSL key crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x35A0, 0x07E, blob))
+        gfx_printf("%kWarning - invalid ECDSA cert crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x36A0, 0x09E, blob))
+        gfx_printf("%kWarning - invalid ECQV-BLS cert crc...\n", COLOR_RED);
+}
+
 bool dump_keys()
 {
     display_backlight_brightness(100, 1000);
@@ -330,27 +382,10 @@ bool dump_keys()
         return false;
     }
 
-    char serial[31] = "";
-    readData((u8 *)serial, 0x250, 30, NULL);
+    char serial[15];
+    readData((u8 *)serial, 0x250, 14, NULL);
 
     gfx_printf("%kCurrent serial: [%s]\n\n", COLOR_BLUE, serial);
-
-    // Determine stored crc
-    u8 *storedCrc = (u8 *)calloc(2, sizeof(u8));
-    readData((u8 *)storedCrc, 0x250 + 30, 2, NULL);
-
-    // Calculate crc
-    const char *serialBytes = serial;
-    u16 crcValue = get_crc_16(serialBytes, 30);
-    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
-
-    // Validate crc
-    if (memcmp(storedCrc, crc, 0x2) == 0)
-        gfx_printf("%kValid serial crc\n", COLOR_GREEN);
-    else
-        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
-   
-    free(storedCrc);
 
     return true;
 }
@@ -376,20 +411,10 @@ bool writeSerial()
     }
 
     const u32 serialOffset = 0x250;
-    const u32 serialBlockSize = 0x1E;
-
     if (!writeData((u8 *)junkSerial, serialOffset, 14, NULL))
         return false;
 
-    // write crc at end of serial-number block
-    char serial[31] = "";
-    readData((u8 *)serial, serialOffset, serialBlockSize, NULL);
-
-    const char *serialBytes = serial;
-    u16 crcValue = get_crc_16(serialBytes, serialBlockSize);
-    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
-  
-    return writeData(crc, serialOffset + serialBlockSize, 2, NULL);
+    return calculateAndWriteCrc(serialOffset, 0x1E);
 }
 
 bool incognito()
@@ -402,43 +427,60 @@ bool incognito()
             return false;
     }
 
-    gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
+    validateChecksums(NULL);
+
+    gfx_printf("%kWriting fake serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-
-    gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
-    if (!erase(0x0AE0, 0x800)) // client cert
+/*
+    gfx_printf("%kErasing ECC-B233 device cert...\n", COLOR_YELLOW);
+    if (!erase(0x0480, 0x180))
         return false;
 
-    gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
-    if (!erase(0x3AE0, 0x130)) // private key
+    if (!calculateAndWriteCrc(0x0480, 0x18E)) // whatever I do here, it crashes Atmos..?
+        return false;
+*/
+    gfx_printf("%kErasing SSL cert...\n", COLOR_YELLOW);
+    if (!erase(0x0AE0, 0x800))
         return false;
 
-    gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x35E1, 0x006)) // deviceId
+    gfx_printf("%kErasing extended SSL key...\n", COLOR_YELLOW);
+    if (!erase(0x3AE0, 0x130))
         return false;
 
-    gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x36E1, 0x006)) // deviceId
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x3AE0, 0x13E))
         return false;
 
-    gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x02B0, 0x180)) // device cert
+    gfx_printf("%kErasing Amiibo ECDSA cert...\n", COLOR_YELLOW);
+    if (!erase(0x35A0, 0x070))
         return false;
 
-    gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x3D70, 0x240)) // device cert
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x35A0, 0x07E))
         return false;
 
-    gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
-    if (!erase(0x3FC0, 0x240)) // device key
+    gfx_printf("%kErasing Amiibo ECQV-BLS root cert...\n", COLOR_YELLOW);
+    if (!erase(0x36A0, 0x090))
         return false;
 
-    gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x36A0, 0x09E))
+        return false;
+
+    gfx_printf("%kErasing RSA-2048 extended device key...\n", COLOR_YELLOW);
+    if (!erase(0x3D70, 0x240)) // seems empty & unused!
+        return false;
+
+    gfx_printf("%kErasing RSA-2048 device certificate...\n", COLOR_YELLOW);
+    if (!erase(0x3FC0, 0x240)) // seems empty & unused!
+        return false;
+
+    gfx_printf("%kWriting SSL cert hash...\n", COLOR_YELLOW);
     if (!writeClientCertHash())
         return false;
 
-    gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting body hash...\n", COLOR_YELLOW);
     if (!writeCal0Hash())
         return false;
 
@@ -806,6 +848,8 @@ bool verifyProdinfo(u8 *blob)
 
     if (verifyClientCertHash(blob) && verifyCal0Hash(blob))
     {
+        validateChecksums(blob);
+
         char serial[15] = "";
         if (blob == NULL)
         {
@@ -985,6 +1029,13 @@ bool restoreProdinfo()
                    COLOR_RED);
         goto out;
     }
+
+    /*
+    if (validateCrc(0x250, 0x1E, NULL))
+        gfx_printf("%kValid serial checksum\n", COLOR_GREEN);
+    else
+        gfx_printf("%kWarning - invalid serial checksum\n", COLOR_RED);
+    */
 
     result = true;
     gfx_printf("\n%kRestore from %s done!\n\n", COLOR_GREEN, name);

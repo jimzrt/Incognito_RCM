@@ -19,6 +19,20 @@
 
 #include "../utils/types.h"
 
+#define FS_HEADER_KEK_SOURCE         0
+#define FS_HEADER_KEY_SOURCE         1
+#define FS_KEY_AREA_KEY_APPLI_SOURCE 2
+#define FS_KEY_AREA_KEY_OCEAN_SOURCE 3
+#define FS_KEY_AREA_KEY_SYSTE_SOURCE 4
+#define FS_SAVE_MAC_KEK_SOURCE       5
+#define FS_SAVE_MAC_KEY_SOURCE       6
+#define FS_SAVE_MAC_SD_KEK_SOURCE    7
+#define FS_SAVE_MAC_SD_KEY_SOURCE    8
+#define FS_SD_CUSTOM_KEY_SOURCE      9
+#define FS_SD_KEK_SOURCE             10
+#define FS_SD_NCA_KEY_SOURCE         11
+#define FS_SD_SAVE_KEY_SOURCE        12
+
 typedef struct _key_info_t
 {
 	u32 start_offset;

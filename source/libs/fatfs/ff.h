@@ -289,7 +289,7 @@ FRESULT f_getlabel (const TCHAR* path, TCHAR* label, DWORD* vsn);	/* Get volume 
 FRESULT f_setlabel (const TCHAR* label);							/* Set volume label */
 FRESULT f_forward (FIL* fp, UINT(*func)(const BYTE*,UINT), UINT btf, UINT* bf);	/* Forward data to the stream */
 #ifdef FF_FASTFS
-DWORD  *f_expand_cltbl (FIL* fp, UINT tblsz, FSIZE_t ofs);			/* Expand file and populate cluster table */
+DWORD  *f_expand_cltbl (FIL* fp, UINT tblsz, DWORD *tbl, FSIZE_t ofs);	/* Expand file and populate cluster table */
 #endif
 FRESULT f_expand (FIL* fp, FSIZE_t fsz, BYTE opt);					/* Allocate a contiguous block to the file */
 FRESULT f_mount (FATFS* fs, const TCHAR* path, BYTE opt);			/* Mount/Unmount a logical drive */

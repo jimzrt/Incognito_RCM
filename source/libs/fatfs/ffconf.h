@@ -41,7 +41,7 @@
 #define FF_USE_MKFS		0
 /* This option switches f_mkfs() function. (0:Disable or 1:Enable) */
 
-#define FF_FASTFS 0
+#define FF_FASTFS       0
 
 #if FF_FASTFS
 #define FF_USE_FASTSEEK	1

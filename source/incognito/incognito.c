@@ -37,6 +37,7 @@
 #include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
 #include "../storage/sdmmc.h"
+#include "../utils/btn.h"
 #include "../utils/list.h"
 #include "../utils/sprintf.h"
 #include "../utils/util.h"
@@ -81,7 +82,7 @@ emmc_part_t *prodinfo_part;
 static u8 temp_key[0x10],
     bis_key[4][0x20] = {0},
     device_key[0x10] = {0},
-    new_device_key[0x10] = {0},
+    device_key_4x[0x10] = {0},
     keyblob[KB_FIRMWARE_VERSION_600 + 1][0x90] = {0},
     keyblob_key[KB_FIRMWARE_VERSION_600 + 1][0x10] = {0},
     keyblob_mac_key[KB_FIRMWARE_VERSION_600 + 1][0x10] = {0},
@@ -93,8 +94,9 @@ static u8 temp_key[0x10],
 LIST_INIT(gpt);
 
 // key functions
-static bool _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
+static int _key_exists(const void *data) { return memcmp(data, zeros, 0x10) != 0; };
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed);
+static void _get_device_key(u32 ks, void *out_device_key, u32 revision, const void *device_key, const void *master_key);
 
 unsigned int crc_16_table[16] = {
     0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
@@ -193,7 +195,7 @@ bool dump_keys()
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
-    emummc_storage_set_mmc_partition(&storage, 1);
+    emummc_storage_set_mmc_partition(&storage, EMMC_BOOT0);
     emummc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id)
@@ -232,7 +234,7 @@ bool dump_keys()
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700)
     {
-        se_aes_key_read(12, master_key[KB_FIRMWARE_VERSION_MAX], 0x10);
+        se_aes_key_read(se_key_acc_ctrl_get(12) == 0x6A ? 13 : 12, master_key[KB_FIRMWARE_VERSION_MAX], 0x10);
     }
 
     //get_tsec: ;
@@ -293,14 +295,14 @@ bool dump_keys()
         if (i == 0)
         {
             se_aes_crypt_block_ecb(7, 0, device_key, per_console_key_source); // devkey = unwrap(pcks, kbk0)
-            se_aes_crypt_block_ecb(7, 0, new_device_key, per_console_key_source_4x);
+            se_aes_crypt_block_ecb(7, 0, device_key_4x, per_console_key_source_4x);
         }
 
         // verify keyblob is not corrupt
         emummc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
         se_aes_key_set(3, keyblob_mac_key[i], 0x10);
         se_aes_cmac(3, keyblob_mac, 0x10, keyblob_block + 0x10, 0xa0);
-        if (memcmp(keyblob_block, keyblob_mac, 0x10))
+        if (memcmp(keyblob_block, keyblob_mac, 0x10) != 0)
         {
             EPRINTFARGS("Keyblob %x corrupt.", i);
             // gfx_hexdump(i, keyblob_block, 0x10);
@@ -325,17 +327,15 @@ bool dump_keys()
         if ((fuse_read_odm(4) & 0x800) && fuse_read_odm(0) == 0x8E61ECAE && fuse_read_odm(1) == 0xF2BA3BB2)
         {
             key_generation = fuse_read_odm(2) & 0x1F;
+            if (key_generation)
+                key_generation--;
         }
     }
     if (_key_exists(device_key))
     {
         if (key_generation)
         {
-            se_aes_key_set(8, new_device_key, 0x10);
-            se_aes_crypt_block_ecb(8, 0, temp_key, new_device_key_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
-            se_aes_key_set(8, master_key[0], 0x10);
-            se_aes_unwrap_key(8, 8, new_device_keygen_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
-            se_aes_crypt_block_ecb(8, 0, temp_key, temp_key);
+            _get_device_key(8, temp_key, key_generation, device_key_4x, master_key[0]);
         }
         else
             memcpy(temp_key, device_key, 0x10);
@@ -352,7 +352,7 @@ bool dump_keys()
         memcpy(bis_key[3], bis_key[2], 0x20);
     }
 
-    emummc_storage_set_mmc_partition(&storage, 0);
+    emummc_storage_set_mmc_partition(&storage, EMMC_GPP);
     // Parse eMMC GPT.
 
     nx_emmc_gpt_parse(&gpt, &storage);
@@ -511,6 +511,19 @@ static void _generate_kek(u32 ks, const void *key_source, void *master_key, cons
     se_aes_unwrap_key(ks, ks, key_source);
     if (key_seed && _key_exists(key_seed))
         se_aes_unwrap_key(ks, ks, key_seed);
+}
+
+static void _get_device_key(u32 ks, void *out_device_key, u32 revision, const void *device_key, const void *master_key) {
+    if (revision < KB_FIRMWARE_VERSION_400)
+        memcpy(out_device_key, device_key, 0x10);
+
+    revision -= KB_FIRMWARE_VERSION_400;
+    u8 temp_key[0x10] = {0};
+    se_aes_key_set(ks, device_key, 0x10);
+    se_aes_crypt_ecb(ks, 0, temp_key, 0x10, new_device_key_sources[revision], 0x10);
+    se_aes_key_set(ks, master_key, 0x10);
+    se_aes_unwrap_key(ks, ks, new_device_keygen_sources[revision]);
+    se_aes_crypt_ecb(ks, 0, out_device_key, 0x10, temp_key, 0x10);
 }
 
 static inline u32 _read_le_u32(const void *buffer, u32 offset)
@@ -757,7 +770,7 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz, u8 *blob)
         memcpy(hash2, blob + hashOffset, 0x20);
     }
 
-    if (memcmp(hash1, hash2, 0x20))
+    if (memcmp(hash1, hash2, 0x20) != 0)
     {
         EPRINTF("error: hash verification failed\n");
         // gfx_hexdump(0, hash1, 0x20);
@@ -1029,13 +1042,6 @@ bool restoreProdinfo()
                    COLOR_RED);
         goto out;
     }
-
-    /*
-    if (validateCrc(0x250, 0x1E, NULL))
-        gfx_printf("%kValid serial checksum\n", COLOR_GREEN);
-    else
-        gfx_printf("%kWarning - invalid serial checksum\n", COLOR_RED);
-    */
 
     result = true;
     gfx_printf("\n%kRestore from %s done!\n\n", COLOR_GREEN, name);

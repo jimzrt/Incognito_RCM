@@ -230,6 +230,11 @@ void se_key_acc_ctrl(u32 ks, u32 flags)
 		SE(SE_KEY_TABLE_ACCESS_LOCK_OFFSET) &= ~(1 << ks);
 }
 
+u32 se_key_acc_ctrl_get(u32 ks)
+{
+	return SE(SE_KEY_TABLE_ACCESS_REG_OFFSET + 4 * ks);
+}
+
 void se_aes_key_set(u32 ks, const void *key, u32 size)
 {
 	u32 *data = (u32 *)key;

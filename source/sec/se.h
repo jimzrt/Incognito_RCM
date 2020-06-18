@@ -24,6 +24,7 @@ void se_rsa_key_set(u32 ks, const void *mod, u32 mod_size, const void *exp, u32 
 void se_rsa_key_clear(u32 ks);
 int se_rsa_exp_mod(u32 ks, void *dst, u32 dst_size, const void *src, u32 src_size);
 void se_key_acc_ctrl(u32 ks, u32 flags);
+u32  se_key_acc_ctrl_get(u32 ks);
 void se_aes_key_set(u32 ks, const void *key, u32 size);
 void se_aes_iv_set(u32 ks, const void *iv, u32 size);
 void se_aes_key_read(u32 ks, void *key, u32 size);

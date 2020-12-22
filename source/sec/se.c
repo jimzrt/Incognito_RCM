@@ -55,18 +55,18 @@ static void _gf256_mul_x(void *block)
 
 static void _gf256_mul_x_le(void *block)
 {
-	u8 *pdata = (u8 *)block;
-	u32 carry = 0;
+    u32 *pdata = (u32 *)block;
+    u32 carry = 0;
 
-	for (u32 i = 0; i < 0x10; i++)
+    for (u32 i = 0; i < 4; i++)
 	{
-		u8 b = pdata[i];
-		pdata[i] = (b << 1) | carry;
-		carry = b >> 7;
-	}
+        u32 b = pdata[i];
+        pdata[i] = (b << 1) | carry;
+        carry = b >> 31;
+    }
 
-	if (carry)
-		pdata[0x0] ^= 0x87;
+    if (carry)
+        pdata[0x0] ^= 0x87;
 }
 
 static void _se_ll_init(se_ll_t *ll, u32 addr, u32 size)

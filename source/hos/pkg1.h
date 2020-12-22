@@ -17,7 +17,7 @@
 #ifndef _PKG1_H_
 #define _PKG1_H_
 
-#include "../utils/types.h"
+#include <utils/types.h>
 
 #define FS_HEADER_KEK_SOURCE         0
 #define FS_HEADER_KEY_SOURCE         1

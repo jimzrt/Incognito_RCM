@@ -20,7 +20,7 @@
 #include <string.h>
 
 #include "pkg1.h"
-#include "../sec/se.h"
+#include <sec/se.h>
 
 #define HASH_ORDER_100_100 { \
 		FS_KEY_AREA_KEY_APPLI_SOURCE, \

@@ -16,31 +16,32 @@
 
 #include "incognito.h"
 
-#include "../config/config.h"
-#include "../gfx/di.h"
-#include "../gfx/gfx.h"
+#include "../config.h"
+#include <gfx/di.h>
+#include <gfx_utils.h>
 #include "../gfx/tui.h"
 #include "../hos/hos.h"
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"
-#include "../libs/fatfs/ff.h"
-#include "../mem/heap.h"
-#include "../mem/mc.h"
-#include "../mem/sdram.h"
-#include "../sec/se.h"
-#include "../sec/se_t210.h"
-#include "../sec/tsec.h"
-#include "../soc/fuse.h"
-#include "../soc/smmu.h"
-#include "../soc/t210.h"
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <mem/mc.h>
+#include <mem/sdram.h>
+#include <sec/se.h>
+#include <sec/se_t210.h>
+#include <sec/tsec.h>
+#include <soc/fuse.h>
+#include <mem/smmu.h>
+#include <soc/t210.h>
 #include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
-#include "../storage/sdmmc.h"
-#include "../utils/btn.h"
-#include "../utils/list.h"
-#include "../utils/sprintf.h"
-#include "../utils/util.h"
+#include "../storage/nx_emmc_bis.h"
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/list.h>
+#include <utils/sprintf.h>
+#include <utils/util.h>
 
 #include "key_sources.inl"
 
@@ -70,8 +71,6 @@ extern hekate_config h_cfg;
 u32 _key_count = 0;
 sdmmc_storage_t storage;
 sdmmc_t sdmmc;
-emmc_part_t *system_part;
-emmc_part_t *prodinfo_part;
 
 #define SECTORS_IN_CLUSTER 32
 #define PRODINFO_SIZE 0x3FBC00
@@ -90,8 +89,6 @@ static u8 temp_key[0x10],
     // master key-derived families
     master_kek[KB_FIRMWARE_VERSION_MAX + 1][0x10] = {0},
     master_key[KB_FIRMWARE_VERSION_MAX + 1][0x10] = {0};
-
-LIST_INIT(gpt);
 
 // key functions
 static int _key_exists(const void *data) { return memcmp(data, zeros, 0x10) != 0; };
@@ -205,6 +202,8 @@ bool dump_keys()
         return false;
     }
 
+    bool pkg1_not_100 = memcmp(pkg1_id->id, "2016", 4);
+
     bool found_tsec_fw = false;
     for (const u32 *pos = (const u32 *)pkg1; (u8 *)pos < pkg1 + 0x40000; pos += 0x100 / sizeof(u32))
     {
@@ -226,11 +225,11 @@ bool dump_keys()
     tsec_ctxt.pkg1 = pkg1;
     tsec_ctxt.size = 0x100 + key_data->blob0_size + key_data->blob1_size + key_data->blob2_size + key_data->blob3_size + key_data->blob4_size;
 
-    // u32 MAX_KEY = 6;
-    // if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
-    // {
-    //     MAX_KEY = pkg1_id->kb + 1;
-    // }
+    u32 MAX_KEY = 6;
+    if (pkg1_id->kb >= KB_FIRMWARE_VERSION_620)
+    {
+        MAX_KEY = pkg1_id->kb + 1;
+    }
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700)
     {
@@ -354,17 +353,20 @@ bool dump_keys()
 
     emummc_storage_set_mmc_partition(&storage, EMMC_GPP);
     // Parse eMMC GPT.
-
+    LIST_INIT(gpt);
     nx_emmc_gpt_parse(&gpt, &storage);
 
     // Find PRODINFO partition.
-    prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
+    emmc_part_t *prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
+    //prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
     if (!prodinfo_part)
     {
         EPRINTF("Failed to locate PRODINFO.");
         return false;
     }
 
+    // Set BIS keys.
+    // PRODINFO/PRODINFOF
     se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
     se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 

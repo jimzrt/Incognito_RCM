@@ -16,29 +16,29 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include <string.h>
 
-#include "config/config.h"
-#include "config/ini.h"
-#include "gfx/di.h"
-#include "gfx/gfx.h"
+#include "config.h"
+#include <gfx/di.h>
+#include <gfx_utils.h>
 #include "gfx/tui.h"
 #include "hos/pkg1.h"
-#include "libs/fatfs/ff.h"
-#include "mem/heap.h"
-#include "mem/minerva.h"
-#include "power/max77620.h"
-#include "rtc/max77620-rtc.h"
-#include "soc/bpmp.h"
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <mem/minerva.h>
+#include <power/max77620.h>
+#include <rtc/max77620-rtc.h>
+#include <soc/bpmp.h>
 #include "soc/hw_init.h"
 #include "storage/emummc.h"
 #include "storage/nx_emmc.h"
-#include "storage/sdmmc.h"
-#include "storage/sdmmc_driver.h"
-#include "utils/btn.h"
-#include "utils/dirlist.h"
-#include "utils/sprintf.h"
-#include "utils/util.h"
+#include <storage/nx_sd.h>
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/dirlist.h>
+#include <utils/sprintf.h>
+#include <utils/util.h>
 
 #include "incognito/incognito.h"
 

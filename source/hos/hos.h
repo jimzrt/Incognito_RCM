@@ -20,9 +20,9 @@
 
 #include "pkg1.h"
 #include "pkg2.h"
-#include "../utils/types.h"
-#include "../config/ini.h"
-#include "../sec/tsec.h"
+#include <utils/types.h>
+#include <utils/ini.h>
+#include <sec/tsec.h>
 
 #include <assert.h>
 
@@ -44,6 +44,7 @@
 
 typedef struct _exo_ctxt_t
 {
+	bool fs_is_510;
 	bool no_user_exceptions;
 	bool user_pmu;
 	bool *cal0_blank;
@@ -52,23 +53,30 @@ typedef struct _exo_ctxt_t
 
 typedef struct _hos_eks_keys_t
 {
-	u8 dkg[0x10];
 	u8 mkk[0x10];
 	u8 fdk[0x10];
-	u8 dkk[0x10];
 } hos_eks_keys_t;
+
+typedef struct _hos_eks_bis_keys_t
+{
+	u8 crypt[0x10];
+	u8 tweak[0x10];
+} hos_eks_bis_keys_t;
 
 typedef struct _hos_eks_mbr_t
 {
 	u32 magic;
-	u32 enabled;
-	u32 sbk_low[2];
+	u8  enabled[6];
+	u8  enabled_bis;
+	u8  rsvd;
+	u32 sbk_low;
+	u8  dkg[0x10];
+	u8  dkk[0x10];
 	hos_eks_keys_t keys[6];
-	u32 magic2;
-	u32 rsvd2[3];
+	hos_eks_bis_keys_t bis_keys[3];
 } hos_eks_mbr_t;
 
-static_assert(sizeof(hos_eks_mbr_t) == 416, "HOS EKS storage bigger than MBR!");
+static_assert(sizeof(hos_eks_mbr_t) == 336, "HOS EKS size is wrong!");
 
 typedef struct _launch_ctxt_t
 {
@@ -100,7 +108,7 @@ typedef struct _launch_ctxt_t
 	bool fss0_enable_experimental;
 	bool emummc_forced;
 
-	exo_ctxt_t exo_cfg;
+	exo_ctxt_t exo_ctx;
 
 	ini_sec_t *cfg;
 } launch_ctxt_t;

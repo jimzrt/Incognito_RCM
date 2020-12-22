@@ -37,6 +37,7 @@
 #include <storage/sdmmc.h>
 #include <utils/btn.h>
 #include <utils/dirlist.h>
+#include <utils/ini.h>
 #include <utils/sprintf.h>
 #include <utils/util.h>
 
@@ -246,7 +247,7 @@ void launch_tools()
 
 		memcpy(dir, "sd:/bootloader/payloads", 24);
 
-		filelist = dirlist(dir, NULL, false);
+		filelist = dirlist(dir, NULL, false, false);
 
 		u32 i = 0;
 		u32 i_off = 2;
@@ -485,25 +486,43 @@ extern void pivot_stack(u32 stack_top);
 
 void ipl_main()
 {
+	// Do initial HW configuration. This is compatible with consecutive reruns without a reset.
 	config_hw();
+
+	// Pivot the stack so we have enough space.
 	pivot_stack(IPL_STACK_TOP);
+
+	// Tegra/Horizon configuration goes to 0x80000000+, package2 goes to 0xA9800000, we place our heap in between.
 	heap_init(IPL_HEAP_START);
 
+#ifdef DEBUG_UART_PORT
+	uart_send(DEBUG_UART_PORT, (u8 *)"hekate: Hello!\r\n", 16);
+	uart_wait_idle(DEBUG_UART_PORT, UART_TX_IDLE);
+#endif
+
+	// Set bootloader's default configuration.
 	set_default_configuration();
 
 	sd_mount();
+
 	minerva_init();
 	minerva_change_freq(FREQ_1600);
 
 	display_init();
-	u32 *fb = display_init_framebuffer();
+
+	u32 *fb = display_init_framebuffer_pitch();
 	gfx_init_ctxt(fb, 720, 1280, 720);
+
 	gfx_con_init();
+
 	display_backlight_pwm_init();
 
+	// Overclock BPMP.
 	bpmp_clk_rate_set(BPMP_CLK_DEFAULT_BOOST);
 
-	h_cfg.emummc_force_disable = emummc_load_cfg();
+	emummc_load_cfg();
+	// Ignore whether emummc is enabled.
+	h_cfg.emummc_force_disable = emu_cfg.sector == 0 && !emu_cfg.path;
 
 	// if (b_cfg.boot_cfg & BOOT_CFG_SEPT_RUN)
 	// {

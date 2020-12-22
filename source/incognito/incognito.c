@@ -69,7 +69,8 @@ extern int sd_save_to_file(void *buf, u32 size, const char *filename);
 extern hekate_config h_cfg;
 
 u32 _key_count = 0;
-sdmmc_storage_t storage;
+//sdmmc_storage_t storage;
+emmc_part_t prodinfo_part;
 sdmmc_t sdmmc;
 
 #define SECTORS_IN_CLUSTER 32
@@ -184,7 +185,7 @@ bool dump_keys()
 
     tsec_ctxt_t tsec_ctxt;
 
-    if (emummc_storage_init_mmc(&storage, &sdmmc) == 2)
+    if (emummc_storage_init_mmc(&emmc_storage, &sdmmc) == 2)
     {
         EPRINTF("Unable to init MMC.");
         return false;
@@ -192,8 +193,8 @@ bool dump_keys()
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
-    emummc_storage_set_mmc_partition(&storage, EMMC_BOOT0);
-    emummc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
+    emummc_storage_set_mmc_partition(&emmc_storage, EMMC_BOOT0);
+    emummc_storage_read(&emmc_storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id)
     {
@@ -298,7 +299,7 @@ bool dump_keys()
         }
 
         // verify keyblob is not corrupt
-        emummc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
+        emummc_storage_read(&emmc_storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
         se_aes_key_set(3, keyblob_mac_key[i], 0x10);
         se_aes_cmac(3, keyblob_mac, 0x10, keyblob_block + 0x10, 0xa0);
         if (memcmp(keyblob_block, keyblob_mac, 0x10) != 0)
@@ -351,14 +352,13 @@ bool dump_keys()
         memcpy(bis_key[3], bis_key[2], 0x20);
     }
 
-    emummc_storage_set_mmc_partition(&storage, EMMC_GPP);
+    emummc_storage_set_mmc_partition(&emmc_storage, EMMC_GPP);
     // Parse eMMC GPT.
     LIST_INIT(gpt);
-    nx_emmc_gpt_parse(&gpt, &storage);
+    nx_emmc_gpt_parse(&gpt, &emmc_storage);
 
     // Find PRODINFO partition.
     emmc_part_t *prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
-    //prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
     if (!prodinfo_part)
     {
         EPRINTF("Failed to locate PRODINFO.");
@@ -497,10 +497,10 @@ u32 divideCeil(u32 x, u32 y)
 
 void cleanUp()
 {
-
-    h_cfg.emummc_force_disable = emummc_load_cfg();
-    //nx_emmc_gpt_free(&gpt);
-    //emummc_storage_end(&storage);
+    emummc_load_cfg();
+    // Ignore whether emummc is enabled.
+    h_cfg.emummc_force_disable = emu_cfg.sector == 0 && !emu_cfg.path;
+    emummc_storage_end(&emmc_storage);
 }
 
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed)

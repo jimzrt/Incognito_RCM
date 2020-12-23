@@ -390,6 +390,8 @@ out:
 
 void backup_sysnand()
 {
+	gfx_printf("\n%kBacking-up sysnand", COLOR_YELLOW);
+
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())

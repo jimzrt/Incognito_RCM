@@ -26,56 +26,56 @@ static inline void _gf256_mul_x_le(void *block)
         pdata[0x0] ^= 0x87;
 }
 
-static int _nx_aes_xts_crypt_sec(u32 tweak_ks, u32 crypt_ks, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u32 sec, void *dst, const void *src, u32 sec_size)
+static inline int _emmc_xts(u32 ks1, u32 ks2, u32 enc, u8 *tweak, bool regen_tweak, u32 tweak_exp, u64 sec, void *dst, void *src, u32 secsize)
 {
-	u32 *pdst = (u32 *)dst;
-	u32 *psrc = (u32 *)src;
-	u32 *ptweak = (u32 *)tweak;
+    int res = 0;
+    u8 *pdst = (u8 *)dst;
+    u8 *psrc = (u8 *)src;
 
-	if (regen_tweak)
-	{
-		for (int i = 0xF; i >= 0; i--)
-		{
-			tweak[i] = sec & 0xFF;
-			sec >>= 8;
-		}
-		if (!se_aes_crypt_block_ecb(tweak_ks, 1, tweak, tweak))
-			return 0;
-	}
+    if (regen_tweak)
+    {
+        for (int i = 0xF; i >= 0; i--)
+        {
+            tweak[i] = sec & 0xFF;
+            sec >>= 8;
+        }
+        if (!se_aes_crypt_block_ecb(ks1, 1, tweak, tweak))
+            goto out;
+    }
 
-	// tweak_exp allows us to use a saved tweak to reduce _gf256_mul_x_le calls.
-	for (u32 i = 0; i < (tweak_exp << 5); i++)
-		_gf256_mul_x_le(tweak);
+    for (u32 i = 0; i < tweak_exp * 0x20; i++)
+        _gf256_mul_x_le(tweak);
 
-	u8 orig_tweak[0x10];
-	memcpy(orig_tweak, tweak, 0x10);
+    u8 temptweak[0x10];
+    memcpy(temptweak, tweak, 0x10);
 
-	// We are assuming a 0x10-aligned sector size in this implementation.
-	for (u32 i = 0; i < (sec_size >> 4); i++)
-	{
-		for (u32 j = 0; j < 4; j++)
-			pdst[j] = psrc[j] ^ ptweak[j];
+    //We are assuming a 0x10-aligned sector size in this implementation.
+    for (u32 i = 0; i < secsize / 0x10; i++)
+    {
+        for (u32 j = 0; j < 0x10; j++)
+            pdst[j] = psrc[j] ^ tweak[j];
+        _gf256_mul_x_le(tweak);
+        psrc += 0x10;
+        pdst += 0x10;
+    }
 
-		_gf256_mul_x_le(tweak);
-		psrc += 4;
-		pdst += 4;
-	}
+    se_aes_crypt_ecb(ks2, enc, dst, secsize, src, secsize);
 
-	if (!se_aes_crypt_ecb(crypt_ks, enc, dst, sec_size, dst, sec_size))
-		return 0;
+    pdst = (u8 *)dst;
 
-	pdst = (u32 *)dst;
-	ptweak = (u32 *)orig_tweak;
-	for (u32 i = 0; i < (sec_size >> 4); i++)
-	{
-		for (u32 j = 0; j < 4; j++)
-			pdst[j] = pdst[j] ^ ptweak[j];
+    memcpy(tweak, temptweak, 0x10);
+    for (u32 i = 0; i < secsize / 0x10; i++)
+    {
+        for (u32 j = 0; j < 0x10; j++)
+            pdst[j] = pdst[j] ^ tweak[j];
+        _gf256_mul_x_le(tweak);
+        pdst += 0x10;
+    }
 
-		_gf256_mul_x_le(orig_tweak);
-		pdst += 4;
-	}
+    res = 1;
 
-	return 1;
+out:;
+    return res;
 }
 
 // replacement for nx_emmc_part_write in storage/nx_emmc, which uses sdmmc_storage_write
@@ -100,7 +100,7 @@ bool prodinfo_read(
     u32 tweak_exp = 0;
     bool regen_tweak = true;
 
-    if (nx_emmc_part_read(&emmc_storage, prodinfo_part, sector, count, buff))
+    if (nx_emmc_part_read(&storage, prodinfo_part, sector, count, buff))
     {
         if (prev_cluster != sector / 0x20)
         { // sector in different cluster than last read
@@ -118,7 +118,7 @@ bool prodinfo_read(
         }
 
         // fatfs will never pull more than a cluster
-        result = _nx_aes_xts_crypt_sec(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
+        result = _emmc_xts(9, 8, 0, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200);
 
         prev_sector = sector + count - 1;
         return result;
@@ -155,10 +155,10 @@ bool prodinfo_write(
     }
 
     // fatfs will never pull more than a cluster
-    if(!_nx_aes_xts_crypt_sec(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200)){
+    if(!_emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200)){
         return false;
     }
-    if (nx_emummc_part_write(&emmc_storage, prodinfo_part, sector, count, buff))
+    if (nx_emummc_part_write(&storage, prodinfo_part, sector, count, buff))
     {
         prev_sector = sector + count - 1;
         return true;

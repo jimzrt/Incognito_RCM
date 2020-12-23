@@ -62,7 +62,6 @@ u8 warmboot_reboot[] = {
 #define SEPT_STG2_ADDR  (SEPT_PK1T_ADDR + 0x60E0)
 #define SEPT_PKG_SZ     (0x2F100 + WB_RST_SIZE)
 
-extern u32 color_idx;
 extern boot_cfg_t b_cfg;
 extern void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size);
 
@@ -158,7 +157,7 @@ int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 	f_close(&fp);
 
 	sd_unmount();
-	gfx_printf("\n%kPress Power or Vol +/-\n   to Reboot to Sept...", colors[(color_idx++) % 6]);
+	gfx_printf("\n%kPress Power or Vol +/-\n   to Reboot to Sept...", colors[0]);
 
 	u32 pk1t_sept = SEPT_PK1T_ADDR - (ALIGN(PATCHED_RELOC_SZ, 0x10) + WB_RST_SIZE);
 

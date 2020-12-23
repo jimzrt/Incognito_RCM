@@ -477,9 +477,6 @@ ment_t ment_top[] = {
 
 menu_t menu_top = {ment_top, NULL, 0, 0};
 
-#define IPL_STACK_TOP  0x90010000
-#define IPL_HEAP_START 0x90020000
-
 extern void pivot_stack(u32 stack_top);
 
 // todo: chainload to reboot payload or payloads folder option?

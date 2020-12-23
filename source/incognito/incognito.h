@@ -24,6 +24,19 @@
 void screenshot(const char* suffix);
 //testing
 
+typedef struct {
+    u8 master_kek[0x10];
+    u8 data[0x70];
+    u8 package1_key[0x10];
+} keyblob_t;
+
+typedef struct {
+    u8 cmac[0x10];
+    u8 iv[0x10];
+    keyblob_t key_data;
+    u8 unused[0x150];
+} encrypted_keyblob_t;
+
 bool isSysNAND();
 bool dump_keys();
 bool incognito();

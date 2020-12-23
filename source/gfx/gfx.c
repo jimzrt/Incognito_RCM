@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 naehrwert
- * Copyright (C) 2018-2019 CTCaer
- * Copyright (c) 2019 shchmue
+ * Copyright (c) 2018-2020 CTCaer
+ * Copyright (c) 2019-2020 shchmue
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -18,8 +18,11 @@
 
 #include <stdarg.h>
 #include <string.h>
-#include <stdlib.h>
 #include "gfx.h"
+
+// Global gfx console and context.
+gfx_ctxt_t gfx_ctxt;
+gfx_con_t gfx_con;
 
 static const u8 _gfx_font[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Char 032 ( )
@@ -119,17 +122,14 @@ static const u8 _gfx_font[] = {
 	0x00, 0x00, 0x00, 0x4C, 0x32, 0x00, 0x00, 0x00  // Char 126 (~)
 };
 
-void gfx_init_ctxt(u32 *fb, u32 width, u32 height, u32 stride)
-{
-	gfx_ctxt.fb = fb;
-	gfx_ctxt.width = width;
-	gfx_ctxt.height = height;
-	gfx_ctxt.stride = stride;
-}
-
 void gfx_clear_grey(u8 color)
 {
 	memset(gfx_ctxt.fb, color, gfx_ctxt.width * gfx_ctxt.height * 4);
+}
+
+void gfx_clear_partial_grey(u8 color, u32 pos_x, u32 height)
+{
+	memset(gfx_ctxt.fb + pos_x * gfx_ctxt.stride, color, height * 4 * gfx_ctxt.stride);
 }
 
 void gfx_clear_color(u32 color)
@@ -138,9 +138,12 @@ void gfx_clear_color(u32 color)
 		gfx_ctxt.fb[i] = color;
 }
 
-void gfx_clear_partial_grey(u8 color, u32 pos_x, u32 height)
+void gfx_init_ctxt(u32 *fb, u32 width, u32 height, u32 stride)
 {
-	memset(gfx_ctxt.fb + pos_x * gfx_ctxt.stride, color, height * 4 * gfx_ctxt.stride);
+	gfx_ctxt.fb = fb;
+	gfx_ctxt.width = width;
+	gfx_ctxt.height = height;
+	gfx_ctxt.stride = stride;
 }
 
 void gfx_con_init()
@@ -189,7 +192,7 @@ void gfx_putc(char c)
 
 			for (u32 i = 0; i < 16; i+=2)
 			{
-				u8 v = *cbuf++;
+				u8 v = *cbuf;
 				for (u32 k = 0; k < 2; k++)
 				{
 					for (u32 j = 0; j < 8; j++)
@@ -214,9 +217,11 @@ void gfx_putc(char c)
 					fb += gfx_ctxt.stride - 16;
 					v = *cbuf;
 				}
+				cbuf++;
 			}
 			gfx_con.x += 16;
-			if (gfx_con.x >= gfx_ctxt.width - 16) {
+			if (gfx_con.x >= gfx_ctxt.width - 16)
+			{
 				gfx_con.x = 0;
 				gfx_con.y += 16;
 			}
@@ -250,7 +255,8 @@ void gfx_putc(char c)
 				fb += gfx_ctxt.stride - 8;
 			}
 			gfx_con.x += 8;
-			if (gfx_con.x >= gfx_ctxt.width - 8) {
+			if (gfx_con.x >= gfx_ctxt.width - 8)
+			{
 				gfx_con.x = 0;
 				gfx_con.y += 8;
 			}
@@ -408,13 +414,13 @@ void gfx_print_header()
 	gfx_printf("%k _/ // / / / /__/ /_/ / /_/ / / / / / /_/ /_/ /    / _, _/ /___/ /  / /  \n", COLOR_GREEN);
 	gfx_printf("%k/___/_/ /_/\\___/\\____/\\__, /_/ /_/_/\\__/\\____/____/_/ |_|\\____/_/  /_/   \n", colors[4]);
 	gfx_printf("%k                     /____/                 /_____/                      \n", colors[4]);
+	gfx_printf("%k[UNOFFICIAL]\n", COLOR_BLUE);
 	gfx_con.fntsz = 14;
 	gfx_printf("%kv%d.%d.%d - by jimzrt%k\n\n\n\n",
 			   colors[4], LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
 	gfx_con.fntsz = prevFontSize;
 }
 
-#ifdef DEBUG
 void gfx_hexdump(u32 base, const u8 *buf, u32 len)
 {
 	if (gfx_con.mute)
@@ -468,86 +474,12 @@ void gfx_hexdump(u32 base, const u8 *buf, u32 len)
 	gfx_con.fntsz = prevFontSize;
 }
 
-u8 *gfx_bmp_screenshot(u32 *size)
+static int abs(int x)
 {
-	// 14 bytes
-	struct bitmap_file_header
-	{
-		unsigned char bitmap_type[2]; // 2 bytes
-		int file_size;				  // 4 bytes
-		short reserved1;			  // 2 bytes
-		short reserved2;			  // 2 bytes
-		unsigned int offset_bits;	 // 4 bytes
-	} bfh;
-
-	// bitmap image header (40 bytes)
-	struct bitmap_image_header
-	{
-		unsigned int size_header;   // 4 bytes
-		unsigned int width;			// 4 bytes
-		unsigned int height;		// 4 bytes
-		short int planes;			// 2 bytes
-		short int bit_count;		// 2 bytes
-		unsigned int compression;   // 4 bytes
-		unsigned int image_size;	// 4 bytes
-		unsigned int ppm_x;			// 4 bytes
-		unsigned int ppm_y;			// 4 bytes
-		unsigned int clr_used;		// 4 bytes
-		unsigned int clr_important; // 4 bytes
-	} bih;
-
-	u32 *fb = gfx_ctxt.fb;
-
-	u32 width = gfx_ctxt.width;
-	u32 height = gfx_ctxt.height;
-
-	u32 image_size = width * height;
-
-	u32 file_size = 40 + 14 + 3 * image_size;
-
-	u32 dpi = 237;
-	u32 ppm = dpi * 39.375;
-
-	memcpy(&bfh.bitmap_type, "BM", 2);
-	bfh.file_size = file_size;
-	bfh.reserved1 = 0;
-	bfh.reserved2 = 0;
-	bfh.offset_bits = 0;
-
-	bih.size_header = sizeof(bih);
-	bih.width = width;
-	bih.height = height;
-	bih.planes = 1;
-	bih.bit_count = 24;
-	bih.compression = 0;
-	bih.image_size = 0;
-	bih.ppm_x = ppm;
-	bih.ppm_y = ppm;
-	bih.clr_used = 0;
-	bih.clr_important = 0;
-
-	u8 *buffer = (u8 *)malloc(file_size);
-	u32 offset = 0;
-	memcpy(buffer, &bfh, 14);
-	offset += 14;
-	memcpy(buffer + offset, &bih, 40);
-	offset += 40;
-
-	for (int y = height - 1; y >= 0; y--)
-	{
-		for (int x = 0; x < width; x++)
-		{
-			u32 index = width * y + x;
-
-			memcpy(buffer + offset, fb + index, 3);
-			offset += 3;
-		}
-	}
-
-	*size = file_size;
-	return buffer;
+	if (x < 0)
+		return -x;
+	return x;
 }
-#endif
 
 void gfx_set_pixel(u32 x, u32 y, u32 color)
 {

@@ -9,6 +9,12 @@ Massive Thanks to CTCaer, shchmue and blawar!
 
 This project is in early stage, so have a nand backup!!
 
+Patch note
+=
+*Scandal-UK: I have maintained this project with code from projects by CTCaer and schmue. I have added bug fixes and updates.*
+
+*NOTE: Atmosphere now contains this feature, although it is unknown if it gets cached anywhere before Atmosphere overwrites it - to get it going you just need to follow the instructions in [the Wiki](https://github.com/Scandal-UK/Incognito_RCM/wiki).*
+
 Usage
 =
 * Launch Incoginito_RCM.bin using your favorite payload injector

@@ -16,19 +16,25 @@
 
 #include <string.h>
 
+#include "hos.h"
+#include "fss.h"
 #include "sept.h"
-#include "../gfx/di.h"
-#include "../libs/fatfs/ff.h"
-#include "../mem/heap.h"
-#include "../soc/hw_init.h"
-#include "../soc/pmc.h"
-#include "../soc/t210.h"
+#include "../config.h"
+#include <utils/ini.h>
+#include <gfx/di.h>
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <soc/hw_init.h>
+#include <soc/pmc.h>
+#include <soc/t210.h>
 #include "../storage/nx_emmc.h"
-#include "../storage/sdmmc.h"
-#include "../utils/btn.h"
-#include "../utils/types.h"
+#include <storage/nx_sd.h>
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/list.h>
+#include <utils/types.h>
 
-#include "../gfx/gfx.h"
+#include <gfx_utils.h>
 
 #define PATCHED_RELOC_SZ 0x94
 
@@ -56,50 +62,82 @@ u8 warmboot_reboot[] = {
 #define SEPT_STG2_ADDR  (SEPT_PK1T_ADDR + 0x60E0)
 #define SEPT_PKG_SZ     (0x2F100 + WB_RST_SIZE)
 
-extern u32 color_idx;
 extern boot_cfg_t b_cfg;
-extern void sd_unmount();
 extern void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size);
 
 int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 {
 	FIL fp;
+	bool fss0_sept_used = false;
 
 	// Copy warmboot reboot code and TSEC fw.
 	memcpy((u8 *)(SEPT_PK1T_ADDR - WB_RST_SIZE), (u8 *)warmboot_reboot, sizeof(warmboot_reboot));
 	memcpy((void *)SEPT_PK1T_ADDR, tsec_fw, tsec_size);
 	*(vu32 *)SEPT_TCSZ_ADDR = tsec_size;
 
-	// Copy sept-primary.
-	if (f_open(&fp, "sd:/sept/sept-primary.bin", FA_READ))
-		goto error;
+	LIST_INIT(ini_sections);
+	if (ini_parse(&ini_sections, "bootloader/hekate_ipl.ini", false))
+	{
+		bool found = false;
+		LIST_FOREACH_ENTRY(ini_sec_t, ini_sec, &ini_sections, link)
+		{
+			// Only parse non config sections.
+			if (ini_sec->type == INI_CHOICE && strcmp(ini_sec->name, "config"))
+			{
+				LIST_FOREACH_ENTRY(ini_kv_t, kv, &ini_sec->kvs, link)
+				{
+					if (!strcmp("fss0", kv->key))
+					{
+						fss0_sept_t sept_ctxt;
+						sept_ctxt.kb = kb;
+						sept_ctxt.sept_primary = (void *)SEPT_STG1_ADDR;
+						sept_ctxt.sept_secondary = (void *)SEPT_STG2_ADDR;
+						fss0_sept_used = parse_fss(NULL, kv->val, &sept_ctxt);
 
-	if (f_read(&fp, (u8 *)SEPT_STG1_ADDR, f_size(&fp), NULL))
-	{
-		f_close(&fp);
-		goto error;
+						found = true;
+						break;
+					}
+				}
+			}
+			if (found)
+				break;
+		}
 	}
-	f_close(&fp);
 
-	// Copy sept-secondary.
-	if (kb < KB_FIRMWARE_VERSION_810)
+
+	if (!fss0_sept_used)
 	{
-		if (f_open(&fp, "sd:/sept/sept-secondary_00.enc", FA_READ))
-			if (f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ)) // Try the deprecated version.
-				goto error;
-	}
-	else
-	{
-		if (f_open(&fp, "sd:/sept/sept-secondary_01.enc", FA_READ))
+		// Copy sept-primary.
+		if (f_open(&fp, "sd:/sept/sept-primary.bin", FA_READ))
 			goto error;
-	}
 
-	if (f_read(&fp, (u8 *)SEPT_STG2_ADDR, f_size(&fp), NULL))
-	{
+		if (f_read(&fp, (u8 *)SEPT_STG1_ADDR, f_size(&fp), NULL))
+		{
+			f_close(&fp);
+			goto error;
+		}
 		f_close(&fp);
-		goto error;
+
+		// Copy sept-secondary.
+		if (kb < KB_FIRMWARE_VERSION_810)
+		{
+			if (f_open(&fp, "sd:/sept/sept-secondary_00.enc", FA_READ))
+				if (f_open(&fp, "sd:/sept/sept-secondary.enc", FA_READ)) // Try the deprecated version.
+					goto error;
+		}
+		else
+		{
+			if (f_open(&fp, "sd:/sept/sept-secondary_01.enc", FA_READ))
+				goto error;
+		}
+
+		if (f_read(&fp, (u8 *)SEPT_STG2_ADDR, f_size(&fp), NULL))
+		{
+			f_close(&fp);
+			goto error;
+		}
+		f_close(&fp);
 	}
-	f_close(&fp);
 
 	// Save auto boot config to sept payload, if any.
 	boot_cfg_t *tmp_cfg = malloc(sizeof(boot_cfg_t));
@@ -107,7 +145,8 @@ int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 
 	tmp_cfg->boot_cfg |= BOOT_CFG_SEPT_RUN;
 
-	if (f_open(&fp, "sd:/sept/payload.bin", FA_READ | FA_WRITE)) {
+	if (f_open(&fp, "sd:/sept/payload.bin", FA_READ | FA_WRITE))
+	{
 		free(tmp_cfg);
 		goto error;
 	}
@@ -118,7 +157,7 @@ int reboot_to_sept(const u8 *tsec_fw, const u32 tsec_size, const u32 kb)
 	f_close(&fp);
 
 	sd_unmount();
-	gfx_printf("\n%kPress Power or Vol +/-\n   to Reboot to Sept...", colors[(color_idx++) % 6]);
+	gfx_printf("\n%kPress Power or Vol +/-\n   to Reboot to Sept...", colors[0]);
 
 	u32 pk1t_sept = SEPT_PK1T_ADDR - (ALIGN(PATCHED_RELOC_SZ, 0x10) + WB_RST_SIZE);
 

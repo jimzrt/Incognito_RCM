@@ -15,35 +15,28 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "di.h"
+#include <gfx/di.h>
 #include "tui.h"
-#include "../utils/btn.h"
-#include "../config/config.h"
-#include "../power/max17050.h"
-#include "../utils/util.h"
-
-#ifdef MENU_LOGO_ENABLE
-extern u8 *Kc_MENU_LOGO;
-#define X_MENU_LOGO       119
-#define Y_MENU_LOGO        57
-#define X_POS_MENU_LOGO   577
-#define Y_POS_MENU_LOGO  1179
-#endif //MENU_LOGO_ENABLE
+#include "../config.h"
+#include <power/max17050.h>
+#include <utils/btn.h>
+#include <utils/util.h>
 
 extern hekate_config h_cfg;
 
 void tui_sbar(bool force_update)
 {
 	u32 cx, cy;
+	static u32 sbar_time_keeping = 0;
 
-	u32 timePassed = get_tmr_s() - h_cfg.sbar_time_keeping;
+	u32 timePassed = get_tmr_s() - sbar_time_keeping;
 	if (!force_update)
 		if (timePassed < 5)
 			return;
 
 	u8 prevFontSize = gfx_con.fntsz;
 	gfx_con.fntsz = 16;
-	h_cfg.sbar_time_keeping = get_tmr_s();
+	sbar_time_keeping = get_tmr_s();
 
 	u32 battPercent = 0;
 	int battVoltCurr = 0;
@@ -103,19 +96,12 @@ void *tui_do_menu(menu_t *menu)
 	gfx_clear_partial_grey(0x1B, 0, 1256);
 	tui_sbar(true);
 
-#ifdef MENU_LOGO_ENABLE
-	gfx_set_rect_rgb(Kc_MENU_LOGO,
-		X_MENU_LOGO, Y_MENU_LOGO, X_POS_MENU_LOGO, Y_POS_MENU_LOGO);
-#endif //MENU_LOGO_ENABLE
-
 	while (true)
 	{
 		gfx_con_setcol(0xFFCCCCCC, 1, 0xFF1B1B1B);
 		gfx_con_setpos(menu->x, menu->y);
 		gfx_print_header();
-		//gfx_printf("[%kLo%kck%kpi%kck%k_R%kCM%k v%d.%d.%d%k]\n\n",
-		//	colors[0], colors[1], colors[2], colors[3], colors[4], colors[5], 0xFFFF00FF, LP_VER_MJ, LP_VER_MN, LP_VER_BF, 0xFFCCCCCC);
-
+		
 		// Skip caption or seperator lines selection.
 		while (menu->ents[idx].type == MENT_CAPTION ||
 			menu->ents[idx].type == MENT_CHGLINE)
@@ -148,7 +134,8 @@ void *tui_do_menu(menu_t *menu)
 				gfx_con_setcol(0xFF1B1B1B, 1, 0xFFCCCCCC);
 			else
 				gfx_con_setcol(0xFFCCCCCC, 1, 0xFF1B1B1B);
-			if (menu->ents[cnt].type != MENT_CHGLINE && menu->ents[cnt].type != MENT_MENU) {
+			if (menu->ents[cnt].type != MENT_CHGLINE && menu->ents[cnt].type != MENT_MENU)
+			{
 				if (cnt == idx)
 					gfx_printf(" %s", menu->ents[cnt].caption);
 				else
@@ -214,10 +201,6 @@ void *tui_do_menu(menu_t *menu)
 			}
 			gfx_con.fntsz = 16;
 			gfx_clear_partial_grey(0x1B, 0, 1256);
-#ifdef MENU_LOGO_ENABLE
-			gfx_set_rect_rgb(Kc_MENU_LOGO,
-				X_MENU_LOGO, Y_MENU_LOGO, X_POS_MENU_LOGO, Y_POS_MENU_LOGO);
-#endif //MENU_LOGO_ENABLE
 		}
 		tui_sbar(false);
 	}

@@ -355,8 +355,11 @@ bool dump_keys()
 
     emummc_storage_set_mmc_partition(&storage, EMMC_GPP);
     // Parse eMMC GPT.
-
+    LIST_INIT(gpt);
     nx_emmc_gpt_parse(&gpt, &storage);
+
+    se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
+    se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
     // Find PRODINFO partition.
     prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
@@ -366,10 +369,8 @@ bool dump_keys()
         return false;
     }
 
-    se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
-    se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
-
     gfx_printf("%kGot keys!\n%kValidate...", COLOR_GREEN, COLOR_YELLOW);
+
     const char magic[4] = "CAL0";
     char buffer[4];
     readData((u8 *)buffer, 0, 4, NULL);

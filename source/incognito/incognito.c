@@ -16,31 +16,32 @@
 
 #include "incognito.h"
 
-#include "../config/config.h"
-#include "../gfx/di.h"
-#include "../gfx/gfx.h"
+#include "../config.h"
+#include <gfx/di.h>
+#include <gfx_utils.h>
 #include "../gfx/tui.h"
 #include "../hos/hos.h"
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"
-#include "../libs/fatfs/ff.h"
-#include "../mem/heap.h"
-#include "../mem/mc.h"
-#include "../mem/sdram.h"
-#include "../sec/se.h"
-#include "../sec/se_t210.h"
-#include "../sec/tsec.h"
-#include "../soc/fuse.h"
-#include "../soc/smmu.h"
-#include "../soc/t210.h"
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <mem/mc.h>
+#include <mem/sdram.h>
+#include <sec/se.h>
+#include <sec/se_t210.h>
+#include <sec/tsec.h>
+#include <soc/fuse.h>
+#include <mem/smmu.h>
+#include <soc/t210.h>
 #include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
-#include "../storage/sdmmc.h"
-#include "../utils/btn.h"
-#include "../utils/list.h"
-#include "../utils/sprintf.h"
-#include "../utils/util.h"
+#include "../storage/nx_emmc_bis.h"
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/list.h>
+#include <utils/sprintf.h>
+#include <utils/util.h>
 
 #include "key_sources.inl"
 
@@ -295,7 +296,7 @@ bool dump_keys()
         if (i == 0)
         {
             se_aes_crypt_block_ecb(7, 0, device_key, per_console_key_source); // devkey = unwrap(pcks, kbk0)
-            se_aes_crypt_block_ecb(7, 0, device_key_4x, per_console_key_source_4x);
+            se_aes_crypt_block_ecb(7, 0, device_key_4x, device_master_key_source_kek_source);
         }
 
         // verify keyblob is not corrupt
@@ -495,8 +496,7 @@ u32 divideCeil(u32 x, u32 y)
 
 void cleanUp()
 {
-
-    h_cfg.emummc_force_disable = emummc_load_cfg();
+	h_cfg.emummc_force_disable = emu_cfg.sector == 0 && !emu_cfg.path;
     //nx_emmc_gpt_free(&gpt);
     //emummc_storage_end(&storage);
 }
@@ -520,9 +520,9 @@ static void _get_device_key(u32 ks, void *out_device_key, u32 revision, const vo
     revision -= KB_FIRMWARE_VERSION_400;
     u8 temp_key[0x10] = {0};
     se_aes_key_set(ks, device_key, 0x10);
-    se_aes_crypt_ecb(ks, 0, temp_key, 0x10, new_device_key_sources[revision], 0x10);
+    se_aes_crypt_ecb(ks, 0, temp_key, 0x10, device_master_key_source_sources[revision], 0x10);
     se_aes_key_set(ks, master_key, 0x10);
-    se_aes_unwrap_key(ks, ks, new_device_keygen_sources[revision]);
+    se_aes_unwrap_key(ks, ks, device_master_kek_sources[revision]);
     se_aes_crypt_ecb(ks, 0, out_device_key, 0x10, temp_key, 0x10);
 }
 

@@ -7,7 +7,9 @@ It is heavily based on [Lockpick_RCM](https://github.com/shchmue/Lockpick_RCM) a
 
 Massive Thanks to CTCaer, shchmue and blawar!
 
-This project is in early stage, so have a nand backup!!
+## This project is no longer maintained and obsolete
+Atmosphere has long since incorporated the functionality into exosphere.
+For reference: [here](https://github.com/Atmosphere-NX/Atmosphere/blob/master/docs/features/configurations.md#blanking-prodinfo) and [here](https://github.com/Atmosphere-NX/Atmosphere/blob/4fe9a89ab8ed958a3e080d7ee11767bef9cb2d57/config_templates/exosphere.ini#L18)
 
 Usage
 =

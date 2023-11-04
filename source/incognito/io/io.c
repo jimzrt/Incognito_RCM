@@ -1,24 +1,25 @@
 #include "io.h"
 
-#include "../../storage/sdmmc.h"
+#include <storage/sdmmc.h>
 #include "../../storage/nx_emmc.h"
+#include "../../storage/emummc.h"
 
 #include <string.h>
-#include "../../sec/se.h"
+#include <sec/se.h>
 
 extern sdmmc_storage_t storage;
 extern emmc_part_t *prodinfo_part;
 
 static inline void _gf256_mul_x_le(void *block)
 {
-    u8 *pdata = (u8 *)block;
+    u32 *pdata = (u32 *)block;
     u32 carry = 0;
 
-    for (u32 i = 0; i < 0x10; i++)
+    for (u32 i = 0; i < 4; i++)
     {
-        u8 b = pdata[i];
+        u32 b = pdata[i];
         pdata[i] = (b << 1) | carry;
-        carry = b >> 7;
+        carry = b >> 31;
     }
 
     if (carry)
@@ -77,6 +78,14 @@ out:;
     return res;
 }
 
+// replacement for nx_emmc_part_write in storage/nx_emmc, which uses sdmmc_storage_write
+int nx_emummc_part_write(sdmmc_storage_t *storage, emmc_part_t *part, u32 sector_off, u32 num_sectors, void *buf)
+{
+	// The last LBA is inclusive.
+	if (part->lba_start + sector_off > part->lba_end)
+		return 0;
+	return emummc_storage_write(storage, part->lba_start + sector_off, num_sectors, buf);
+}
 
 bool prodinfo_read(
     u8 *buff,   /* Data buffer to store read data */
@@ -149,7 +158,7 @@ bool prodinfo_write(
     if(!_emmc_xts(9, 8, 1, tweak, regen_tweak, tweak_exp, prev_cluster, buff, buff, count * 0x200)){
         return false;
     }
-    if (nx_emmc_part_write(&storage, prodinfo_part, sector, count, buff))
+    if (nx_emummc_part_write(&storage, prodinfo_part, sector, count, buff))
     {
         prev_sector = sector + count - 1;
         return true;

@@ -16,28 +16,30 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include <string.h>
 
-#include "config/config.h"
-#include "config/ini.h"
-#include "gfx/di.h"
-#include "gfx/gfx.h"
+#include "config.h"
+#include <gfx/di.h>
+#include <gfx_utils.h>
 #include "gfx/tui.h"
 #include "hos/pkg1.h"
-#include "libs/fatfs/ff.h"
-#include "mem/heap.h"
-#include "mem/minerva.h"
-#include "power/max77620.h"
-#include "rtc/max77620-rtc.h"
-#include "soc/bpmp.h"
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <mem/minerva.h>
+#include <power/max77620.h>
+#include <rtc/max77620-rtc.h>
+#include <soc/bpmp.h>
 #include "soc/hw_init.h"
 #include "storage/emummc.h"
 #include "storage/nx_emmc.h"
-#include "storage/sdmmc.h"
-#include "utils/btn.h"
-#include "utils/dirlist.h"
-#include "utils/sprintf.h"
-#include "utils/util.h"
+#include <storage/nx_sd.h>
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/dirlist.h>
+#include <utils/ini.h>
+#include <utils/sprintf.h>
+#include <utils/util.h>
 
 #include "incognito/incognito.h"
 
@@ -56,7 +58,7 @@ bool sd_mount()
 	if (sd_mounted)
 		return true;
 
-	if (!sdmmc_storage_init_sd(&sd_storage, &sd_sdmmc, SDMMC_1, SDMMC_BUS_WIDTH_4, 11))
+	if (!sdmmc_storage_init_sd(&sd_storage, &sd_sdmmc, SDMMC_BUS_WIDTH_4, SDHCI_TIMING_UHS_SDR104))
 	{
 		EPRINTF("Failed to init SD card.\nMake sure that it is inserted.\nOr that SD reader is properly seated!");
 	}
@@ -137,9 +139,11 @@ int sd_save_to_file(void *buf, u32 size, const char *filename)
 #define PATCHED_RELOC_ENTRY 0x40010000
 #define EXT_PAYLOAD_ADDR    0xC03C0000
 #define RCM_PAYLOAD_ADDR    (EXT_PAYLOAD_ADDR + ALIGN(PATCHED_RELOC_SZ, 0x10))
-#define COREBOOT_ADDR       (0xD0000000 - 0x100000)
+#define COREBOOT_END_ADDR   0xD0000000
 #define CBFS_DRAM_EN_ADDR   0x4003e000
 #define  CBFS_DRAM_MAGIC    0x4452414D // "DRAM"
+
+static void *coreboot_addr;
 
 void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
 {
@@ -154,7 +158,7 @@ void reloc_patcher(u32 payload_dst, u32 payload_src, u32 payload_size)
 
 	if (payload_size == 0x7000)
 	{
-		memcpy((u8 *)(payload_src + ALIGN(PATCHED_RELOC_SZ, 0x10)), (u8 *)COREBOOT_ADDR, 0x7000); //Bootblock
+		memcpy((u8 *)(payload_src + ALIGN(PATCHED_RELOC_SZ, 0x10)), coreboot_addr, 0x7000); //Bootblock
 		*(vu32 *)CBFS_DRAM_EN_ADDR = CBFS_DRAM_MAGIC;
 	}
 }
@@ -184,7 +188,10 @@ int launch_payload(char *path)
 		if (size < 0x30000)
 			buf = (void *)RCM_PAYLOAD_ADDR;
 		else
-			buf = (void *)COREBOOT_ADDR;
+		{
+			coreboot_addr = (void *)(COREBOOT_END_ADDR - size);
+			buf = coreboot_addr;
+		}
 
 		if (f_read(&fp, buf, size, NULL))
 		{
@@ -240,7 +247,7 @@ void launch_tools()
 
 		memcpy(dir, "sd:/bootloader/payloads", 24);
 
-		filelist = dirlist(dir, NULL, false);
+		filelist = dirlist(dir, NULL, false, false);
 
 		u32 i = 0;
 		u32 i_off = 2;
@@ -383,6 +390,8 @@ out:
 
 void backup_sysnand()
 {
+	gfx_printf("\n%kBacking-up sysnand", COLOR_YELLOW);
+
     h_cfg.emummc_force_disable = true;
     b_cfg.extra_cfg &= ~EXTRA_CFG_DUMP_EMUMMC;
     if (!dump_keys())
@@ -470,34 +479,49 @@ ment_t ment_top[] = {
 
 menu_t menu_top = {ment_top, NULL, 0, 0};
 
-#define IPL_STACK_TOP  0x90010000
-#define IPL_HEAP_START 0x90020000
-
 extern void pivot_stack(u32 stack_top);
 
 // todo: chainload to reboot payload or payloads folder option?
 
 void ipl_main()
 {
+	// Do initial HW configuration. This is compatible with consecutive reruns without a reset.
 	config_hw();
+
+	// Pivot the stack so we have enough space.
 	pivot_stack(IPL_STACK_TOP);
+
+	// Tegra/Horizon configuration goes to 0x80000000+, package2 goes to 0xA9800000, we place our heap in between.
 	heap_init(IPL_HEAP_START);
 
+#ifdef DEBUG_UART_PORT
+	uart_send(DEBUG_UART_PORT, (u8 *)"hekate: Hello!\r\n", 16);
+	uart_wait_idle(DEBUG_UART_PORT, UART_TX_IDLE);
+#endif
+
+	// Set bootloader's default configuration.
 	set_default_configuration();
 
 	sd_mount();
+
 	minerva_init();
 	minerva_change_freq(FREQ_1600);
 
 	display_init();
-	u32 *fb = display_init_framebuffer();
+
+	u32 *fb = display_init_framebuffer_pitch();
 	gfx_init_ctxt(fb, 720, 1280, 720);
+
 	gfx_con_init();
+
 	display_backlight_pwm_init();
 
+	// Overclock BPMP.
 	bpmp_clk_rate_set(BPMP_CLK_DEFAULT_BOOST);
 
-	h_cfg.emummc_force_disable = emummc_load_cfg();
+	emummc_load_cfg();
+	// Ignore whether emummc is enabled.
+	h_cfg.emummc_force_disable = emu_cfg.sector == 0 && !emu_cfg.path;
 
 	// if (b_cfg.boot_cfg & BOOT_CFG_SEPT_RUN)
 	// {

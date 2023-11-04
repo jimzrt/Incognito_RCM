@@ -16,29 +16,32 @@
 
 #include "incognito.h"
 
-#include "../config/config.h"
-#include "../gfx/di.h"
-#include "../gfx/gfx.h"
+#include "../config.h"
+#include <gfx/di.h>
+#include <gfx_utils.h>
 #include "../gfx/tui.h"
+#include "../hos/hos.h"
 #include "../hos/pkg1.h"
 #include "../hos/pkg2.h"
 #include "../hos/sept.h"
-#include "../libs/fatfs/ff.h"
-#include "../mem/heap.h"
-#include "../mem/mc.h"
-#include "../mem/sdram.h"
-#include "../sec/se.h"
-#include "../sec/se_t210.h"
-#include "../sec/tsec.h"
-#include "../soc/fuse.h"
-#include "../soc/smmu.h"
-#include "../soc/t210.h"
+#include <libs/fatfs/ff.h>
+#include <mem/heap.h>
+#include <mem/mc.h>
+#include <mem/sdram.h>
+#include <sec/se.h>
+#include <sec/se_t210.h>
+#include <sec/tsec.h>
+#include <soc/fuse.h>
+#include <mem/smmu.h>
+#include <soc/t210.h>
 #include "../storage/emummc.h"
 #include "../storage/nx_emmc.h"
-#include "../storage/sdmmc.h"
-#include "../utils/list.h"
-#include "../utils/sprintf.h"
-#include "../utils/util.h"
+#include "../storage/nx_emmc_bis.h"
+#include <storage/sdmmc.h>
+#include <utils/btn.h>
+#include <utils/list.h>
+#include <utils/sprintf.h>
+#include <utils/util.h>
 
 #include "key_sources.inl"
 
@@ -80,7 +83,7 @@ emmc_part_t *prodinfo_part;
 static u8 temp_key[0x10],
     bis_key[4][0x20] = {0},
     device_key[0x10] = {0},
-    new_device_key[0x10] = {0},
+    device_key_4x[0x10] = {0},
     keyblob[KB_FIRMWARE_VERSION_600 + 1][0x90] = {0},
     keyblob_key[KB_FIRMWARE_VERSION_600 + 1][0x10] = {0},
     keyblob_mac_key[KB_FIRMWARE_VERSION_600 + 1][0x10] = {0},
@@ -92,8 +95,84 @@ static u8 temp_key[0x10],
 LIST_INIT(gpt);
 
 // key functions
-static bool _key_exists(const void *data) { return memcmp(data, zeros, 0x10); };
+static int _key_exists(const void *data) { return memcmp(data, zeros, 0x10) != 0; };
 static void _generate_kek(u32 ks, const void *key_source, void *master_key, const void *kek_seed, const void *key_seed);
+static void _get_device_key(u32 ks, void *out_device_key, u32 revision, const void *device_key, const void *master_key);
+
+unsigned int crc_16_table[16] = {
+    0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
+    0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400 };
+
+unsigned short int get_crc_16 (const char *p, int n) {
+    unsigned short int crc = 0x55AA;
+    int r;
+
+    while (n-- > 0) {
+        r = crc_16_table[crc & 0xF];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ r ^ crc_16_table[*p & 0xF];
+
+        r = crc_16_table[crc & 0xF];
+        crc = (crc >> 4) & 0x0FFF;
+        crc = crc ^ r ^ crc_16_table[(*p >> 4) & 0xF];
+
+        p++;
+    }
+
+    return(crc);
+}
+
+u16 calculateCrc(u32 offset, u32 size, u8 *blob)
+{
+    const char buffer[size + 1];
+    if (blob == NULL)
+        readData((u8 *)buffer, offset, size, NULL);
+    else
+        memcpy((u8 *)buffer, blob + offset, size);
+
+    return get_crc_16(buffer, size);
+}
+
+u16 readCrc(u32 offset, u8 *blob)
+{
+    u16 buffer;
+    if (blob == NULL)
+        readData((u8 *)&buffer, offset, sizeof(u16), NULL);
+    else
+        memcpy((u8 *)&buffer, blob + offset, sizeof(u16));
+    
+    return buffer;
+}
+
+bool validateCrc(u32 offset, u32 size, u8 *blob)
+{
+    return calculateCrc(offset, size, blob) == readCrc(offset + size, blob);
+}
+
+bool calculateAndWriteCrc(u32 offset, u32 size)
+{
+    u16 crcValue = calculateCrc(offset, size, NULL);
+    u8 crc[2] = { crcValue & 0xff, crcValue >> 8 }; // bytes of u16
+    return writeData(crc, offset + size, sizeof(u16), NULL);
+}
+
+void validateChecksums(u8 *blob)
+{
+    if (!validateCrc(0x0250, 0x1E, blob))
+        gfx_printf("%kWarning - invalid serial crc\n", COLOR_RED);
+
+    if (!validateCrc(0x0480, 0x18E, blob))
+        gfx_printf("%kWarning - invalid ECC-B233 crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x3AE0, 0x13E, blob))
+        gfx_printf("%kWarning - invalid ext SSL key crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x35A0, 0x07E, blob))
+        gfx_printf("%kWarning - invalid ECDSA cert crc...\n", COLOR_RED);
+
+    if (!validateCrc(0x36A0, 0x09E, blob))
+        gfx_printf("%kWarning - invalid ECQV-BLS cert crc...\n", COLOR_RED);
+}
 
 bool dump_keys()
 {
@@ -109,7 +188,7 @@ bool dump_keys()
 
     tsec_ctxt_t tsec_ctxt;
 
-    if (!emummc_storage_init_mmc(&storage, &sdmmc))
+    if (emummc_storage_init_mmc(&storage, &sdmmc) == 2)
     {
         EPRINTF("Unable to init MMC.");
         return false;
@@ -117,12 +196,12 @@ bool dump_keys()
 
     // Read package1.
     u8 *pkg1 = (u8 *)malloc(0x40000);
-    emummc_storage_set_mmc_partition(&storage, 1);
+    emummc_storage_set_mmc_partition(&storage, EMMC_BOOT0);
     emummc_storage_read(&storage, 0x100000 / NX_EMMC_BLOCKSIZE, 0x40000 / NX_EMMC_BLOCKSIZE, pkg1);
     const pkg1_id_t *pkg1_id = pkg1_identify(pkg1);
     if (!pkg1_id)
     {
-        EPRINTF("Unknown pkg1 version.");
+        EPRINTF("Unknown pkg1 version.\n Make sure you have the latest Incognito_RCM.\n If a new firmware version just came out,\n Incognito_RCM must be updated.\n Check Github for new release.");
         free(pkg1);
         return false;
     }
@@ -156,7 +235,7 @@ bool dump_keys()
 
     if (pkg1_id->kb >= KB_FIRMWARE_VERSION_700)
     {
-        se_aes_key_read(12, master_key[KB_FIRMWARE_VERSION_MAX], 0x10);
+        se_aes_key_read(se_key_acc_ctrl_get(12) == 0x6A ? 13 : 12, master_key[KB_FIRMWARE_VERSION_MAX], 0x10);
     }
 
     //get_tsec: ;
@@ -217,14 +296,14 @@ bool dump_keys()
         if (i == 0)
         {
             se_aes_crypt_block_ecb(7, 0, device_key, per_console_key_source); // devkey = unwrap(pcks, kbk0)
-            se_aes_crypt_block_ecb(7, 0, new_device_key, per_console_key_source_4x);
+            se_aes_crypt_block_ecb(7, 0, device_key_4x, device_master_key_source_kek_source);
         }
 
         // verify keyblob is not corrupt
         emummc_storage_read(&storage, 0x180000 / NX_EMMC_BLOCKSIZE + i, 1, keyblob_block);
         se_aes_key_set(3, keyblob_mac_key[i], 0x10);
         se_aes_cmac(3, keyblob_mac, 0x10, keyblob_block + 0x10, 0xa0);
-        if (memcmp(keyblob_block, keyblob_mac, 0x10))
+        if (memcmp(keyblob_block, keyblob_mac, 0x10) != 0)
         {
             EPRINTFARGS("Keyblob %x corrupt.", i);
             // gfx_hexdump(i, keyblob_block, 0x10);
@@ -249,17 +328,15 @@ bool dump_keys()
         if ((fuse_read_odm(4) & 0x800) && fuse_read_odm(0) == 0x8E61ECAE && fuse_read_odm(1) == 0xF2BA3BB2)
         {
             key_generation = fuse_read_odm(2) & 0x1F;
+            if (key_generation)
+                key_generation--;
         }
     }
     if (_key_exists(device_key))
     {
         if (key_generation)
         {
-            se_aes_key_set(8, new_device_key, 0x10);
-            se_aes_crypt_block_ecb(8, 0, temp_key, new_device_key_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
-            se_aes_key_set(8, master_key[0], 0x10);
-            se_aes_unwrap_key(8, 8, new_device_keygen_sources[pkg1_id->kb - KB_FIRMWARE_VERSION_400]);
-            se_aes_crypt_block_ecb(8, 0, temp_key, temp_key);
+            _get_device_key(8, temp_key, key_generation, device_key_4x, master_key[0]);
         }
         else
             memcpy(temp_key, device_key, 0x10);
@@ -276,10 +353,13 @@ bool dump_keys()
         memcpy(bis_key[3], bis_key[2], 0x20);
     }
 
-    emummc_storage_set_mmc_partition(&storage, 0);
+    emummc_storage_set_mmc_partition(&storage, EMMC_GPP);
     // Parse eMMC GPT.
-
+    LIST_INIT(gpt);
     nx_emmc_gpt_parse(&gpt, &storage);
+
+    se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
+    se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
 
     // Find PRODINFO partition.
     prodinfo_part = nx_emmc_part_find(&gpt, "PRODINFO");
@@ -289,10 +369,8 @@ bool dump_keys()
         return false;
     }
 
-    se_aes_key_set(8, bis_key[0] + 0x00, 0x10);
-    se_aes_key_set(9, bis_key[0] + 0x10, 0x10);
-
     gfx_printf("%kGot keys!\n%kValidate...", COLOR_GREEN, COLOR_YELLOW);
+
     const char magic[4] = "CAL0";
     char buffer[4];
     readData((u8 *)buffer, 0, 4, NULL);
@@ -306,17 +384,16 @@ bool dump_keys()
         return false;
     }
 
-    char serial[15] = "";
+    char serial[15];
     readData((u8 *)serial, 0x250, 14, NULL);
 
-    gfx_printf("%kCurrent serial:%s\n\n", COLOR_BLUE, serial);
+    gfx_printf("%kCurrent serial: [%s]\n\n", COLOR_BLUE, serial);
 
     return true;
 }
 
 bool erase(u32 offset, u32 length)
 {
-
     u8 *tmp = (u8 *)calloc(length, sizeof(u8));
     bool result = writeData(tmp, offset, length, NULL);
     free(tmp);
@@ -335,7 +412,11 @@ bool writeSerial()
         junkSerial = "XAW00000000001";
     }
 
-    return writeData((u8 *)junkSerial, 0x250, 14, NULL);
+    const u32 serialOffset = 0x250;
+    if (!writeData((u8 *)junkSerial, serialOffset, 14, NULL))
+        return false;
+
+    return calculateAndWriteCrc(serialOffset, 0x1E);
 }
 
 bool incognito()
@@ -348,43 +429,60 @@ bool incognito()
             return false;
     }
 
-    gfx_printf("%kWriting junk serial...\n", COLOR_YELLOW);
+    validateChecksums(NULL);
+
+    gfx_printf("%kWriting fake serial...\n", COLOR_YELLOW);
     if (!writeSerial())
         return false;
-
-    gfx_printf("%kErasing client cert...\n", COLOR_YELLOW);
-    if (!erase(0x0AE0, 0x800)) // client cert
+/*
+    gfx_printf("%kErasing ECC-B233 device cert...\n", COLOR_YELLOW);
+    if (!erase(0x0480, 0x180))
         return false;
 
-    gfx_printf("%kErasing private key...\n", COLOR_YELLOW);
-    if (!erase(0x3AE0, 0x130)) // private key
+    if (!calculateAndWriteCrc(0x0480, 0x18E)) // whatever I do here, it crashes Atmos..?
+        return false;
+*/
+    gfx_printf("%kErasing SSL cert...\n", COLOR_YELLOW);
+    if (!erase(0x0AE0, 0x800))
         return false;
 
-    gfx_printf("%kErasing deviceId 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x35E1, 0x006)) // deviceId
+    gfx_printf("%kErasing extended SSL key...\n", COLOR_YELLOW);
+    if (!erase(0x3AE0, 0x130))
         return false;
 
-    gfx_printf("%kErasing deviceId 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x36E1, 0x006)) // deviceId
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x3AE0, 0x13E))
         return false;
 
-    gfx_printf("%kErasing device cert 1/2...\n", COLOR_YELLOW);
-    if (!erase(0x02B0, 0x180)) // device cert
+    gfx_printf("%kErasing Amiibo ECDSA cert...\n", COLOR_YELLOW);
+    if (!erase(0x35A0, 0x070))
         return false;
 
-    gfx_printf("%kErasing device cert 2/2...\n", COLOR_YELLOW);
-    if (!erase(0x3D70, 0x240)) // device cert
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x35A0, 0x07E))
         return false;
 
-    gfx_printf("%kErasing device key...\n", COLOR_YELLOW);
-    if (!erase(0x3FC0, 0x240)) // device key
+    gfx_printf("%kErasing Amiibo ECQV-BLS root cert...\n", COLOR_YELLOW);
+    if (!erase(0x36A0, 0x090))
         return false;
 
-    gfx_printf("%kWriting client cert hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting checksum...\n", COLOR_YELLOW);
+    if (!calculateAndWriteCrc(0x36A0, 0x09E))
+        return false;
+
+    gfx_printf("%kErasing RSA-2048 extended device key...\n", COLOR_YELLOW);
+    if (!erase(0x3D70, 0x240)) // seems empty & unused!
+        return false;
+
+    gfx_printf("%kErasing RSA-2048 device certificate...\n", COLOR_YELLOW);
+    if (!erase(0x3FC0, 0x240)) // seems empty & unused!
+        return false;
+
+    gfx_printf("%kWriting SSL cert hash...\n", COLOR_YELLOW);
     if (!writeClientCertHash())
         return false;
 
-    gfx_printf("%kWriting CAL0 hash...\n", COLOR_YELLOW);
+    gfx_printf("%kWriting body hash...\n", COLOR_YELLOW);
     if (!writeCal0Hash())
         return false;
 
@@ -399,8 +497,7 @@ u32 divideCeil(u32 x, u32 y)
 
 void cleanUp()
 {
-
-    h_cfg.emummc_force_disable = emummc_load_cfg();
+	h_cfg.emummc_force_disable = emu_cfg.sector == 0 && !emu_cfg.path;
     //nx_emmc_gpt_free(&gpt);
     //emummc_storage_end(&storage);
 }
@@ -415,6 +512,19 @@ static void _generate_kek(u32 ks, const void *key_source, void *master_key, cons
     se_aes_unwrap_key(ks, ks, key_source);
     if (key_seed && _key_exists(key_seed))
         se_aes_unwrap_key(ks, ks, key_seed);
+}
+
+static void _get_device_key(u32 ks, void *out_device_key, u32 revision, const void *device_key, const void *master_key) {
+    if (revision < KB_FIRMWARE_VERSION_400)
+        memcpy(out_device_key, device_key, 0x10);
+
+    revision -= KB_FIRMWARE_VERSION_400;
+    u8 temp_key[0x10] = {0};
+    se_aes_key_set(ks, device_key, 0x10);
+    se_aes_crypt_ecb(ks, 0, temp_key, 0x10, device_master_key_source_sources[revision], 0x10);
+    se_aes_key_set(ks, master_key, 0x10);
+    se_aes_unwrap_key(ks, ks, device_master_kek_sources[revision]);
+    se_aes_crypt_ecb(ks, 0, out_device_key, 0x10, temp_key, 0x10);
 }
 
 static inline u32 _read_le_u32(const void *buffer, u32 offset)
@@ -661,7 +771,7 @@ bool verifyHash(u32 hashOffset, u32 offset, u32 sz, u8 *blob)
         memcpy(hash2, blob + hashOffset, 0x20);
     }
 
-    if (memcmp(hash1, hash2, 0x20))
+    if (memcmp(hash1, hash2, 0x20) != 0)
     {
         EPRINTF("error: hash verification failed\n");
         // gfx_hexdump(0, hash1, 0x20);
@@ -752,6 +862,8 @@ bool verifyProdinfo(u8 *blob)
 
     if (verifyClientCertHash(blob) && verifyCal0Hash(blob))
     {
+        validateChecksums(blob);
+
         char serial[15] = "";
         if (blob == NULL)
         {

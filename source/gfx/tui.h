@@ -1,6 +1,6 @@
 /*
 * Copyright (c) 2018 naehrwert
-* Copyright (C) 2018 CTCaer
+* Copyright (c) 2018 CTCaer
 *
 * This program is free software; you can redistribute it and/or modify it
 * under the terms and conditions of the GNU General Public License,
@@ -18,8 +18,8 @@
 #ifndef _TUI_H_
 #define _TUI_H_
 
-#include "../utils/types.h"
-#include "gfx.h"
+#include <utils/types.h>
+#include <gfx_utils.h>
 
 #define MENT_END     0
 #define MENT_HANDLER 1
